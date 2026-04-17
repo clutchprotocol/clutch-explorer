@@ -21,13 +21,15 @@ pub enum NodeClientError {
 pub struct NodeClient {
     http_client: Client,
     base_url: String,
+    strict_mode: bool,
 }
 
 impl NodeClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: String, strict_mode: bool) -> Self {
         Self {
             http_client: Client::new(),
             base_url,
+            strict_mode,
         }
     }
 
@@ -92,6 +94,11 @@ impl NodeClient {
                 }
             }
         }
+        if self.strict_mode {
+            return Err(NodeClientError::NotFound(
+                "no block data returned from upstream node".to_string(),
+            ));
+        }
         let now = Utc::now();
         Ok((0..limit)
             .map(|i| {
@@ -137,6 +144,12 @@ impl NodeClient {
                     .unwrap_or_else(Utc::now),
                 total_fees: payload.get("total_fees").and_then(|v| v.as_u64()).unwrap_or(0),
             });
+        }
+        if self.strict_mode {
+            return Err(NodeClientError::NotFound(format!(
+                "block {} not found in upstream node",
+                id
+            )));
         }
         let height = id.parse::<u64>().unwrap_or(100000);
         Ok(BlockDetailDto {
@@ -209,6 +222,11 @@ impl NodeClient {
                 }
             }
         }
+        if self.strict_mode {
+            return Err(NodeClientError::NotFound(
+                "no transaction data returned from upstream node".to_string(),
+            ));
+        }
 
         let now = Utc::now();
         Ok((0..limit)
@@ -269,6 +287,12 @@ impl NodeClient {
                 tx_index: payload.get("tx_index").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             });
         }
+        if self.strict_mode {
+            return Err(NodeClientError::NotFound(format!(
+                "transaction {} not found in upstream node",
+                hash
+            )));
+        }
         Ok(TransactionDetailDto {
             hash: hash.to_string(),
             block_height: 99999,
@@ -299,6 +323,12 @@ impl NodeClient {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false),
             });
+        }
+        if self.strict_mode {
+            return Err(NodeClientError::NotFound(format!(
+                "account {} not found in upstream node",
+                address
+            )));
         }
         Ok(AccountDto {
             address: address.to_string(),
@@ -346,6 +376,11 @@ impl NodeClient {
                     return Ok(mapped);
                 }
             }
+        }
+        if self.strict_mode {
+            return Err(NodeClientError::NotFound(
+                "no validator data returned from upstream node".to_string(),
+            ));
         }
         Ok(vec![
             ValidatorDto {

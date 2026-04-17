@@ -18,7 +18,7 @@ pub struct ExplorerService {
 impl ExplorerService {
     pub fn new(config: AppConfig) -> Self {
         Self {
-            node_client: NodeClient::new(config.clutch_node_api_url),
+            node_client: NodeClient::new(config.clutch_node_api_url, config.strict_mode),
         }
     }
 

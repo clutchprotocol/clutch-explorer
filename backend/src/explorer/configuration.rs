@@ -3,6 +3,10 @@ use dotenv::dotenv;
 use serde::Deserialize;
 use tracing::info;
 
+fn default_strict_mode() -> bool {
+    true
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub log_level: String,
@@ -11,6 +15,8 @@ pub struct AppConfig {
     pub seq_api_key: String,
     pub clutch_node_api_url: String,
     pub allowed_origins: String,
+    #[serde(default = "default_strict_mode")]
+    pub strict_mode: bool,
 }
 
 impl AppConfig {
