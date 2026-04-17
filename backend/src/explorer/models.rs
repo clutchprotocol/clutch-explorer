@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BlockDto {
+pub struct BlockListItemDto {
     pub height: u64,
     pub hash: String,
     pub tx_count: u32,
@@ -11,7 +11,18 @@ pub struct BlockDto {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct TransactionDto {
+pub struct BlockDetailDto {
+    pub height: u64,
+    pub hash: String,
+    pub parent_hash: String,
+    pub tx_count: u32,
+    pub producer: String,
+    pub timestamp: DateTime<Utc>,
+    pub total_fees: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TransactionListItemDto {
     pub hash: String,
     pub block_height: u64,
     pub from: String,
@@ -23,11 +34,26 @@ pub struct TransactionDto {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TransactionDetailDto {
+    pub hash: String,
+    pub block_height: u64,
+    pub from: String,
+    pub to: String,
+    pub amount: u64,
+    pub fee: u64,
+    pub status: String,
+    pub timestamp: DateTime<Utc>,
+    pub nonce: u64,
+    pub tx_index: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountDto {
     pub address: String,
     pub balance: u64,
     pub nonce: u64,
     pub tx_count: u64,
+    pub is_contract: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -52,4 +78,24 @@ pub struct SearchResultDto {
     pub kind: String,
     pub identifier: String,
     pub summary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PagingDto {
+    pub limit: usize,
+    pub offset: usize,
+    pub total: usize,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ListResponseDto<T> {
+    pub items: Vec<T>,
+    pub paging: PagingDto,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ApiErrorDto {
+    pub code: String,
+    pub message: String,
 }
