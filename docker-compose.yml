@@ -1,4 +1,43 @@
 services:
+  explorer-postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=${EXPLORER_POSTGRES_DB:-clutch_explorer}
+      - POSTGRES_USER=${EXPLORER_POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${EXPLORER_POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - explorer-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EXPLORER_POSTGRES_USER:-postgres} -d ${EXPLORER_POSTGRES_DB:-clutch_explorer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - clutch-network
+
+  explorer-indexer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      explorer-postgres:
+        condition: service_healthy
+    command: ["indexer", "--env", "default"]
+    environment:
+      - APP_LOG_LEVEL=info
+      - APP_DATA_SOURCE=postgres
+      - APP_DATABASE_URL=postgres://${EXPLORER_POSTGRES_USER:-postgres}:${EXPLORER_POSTGRES_PASSWORD:-postgres}@explorer-postgres:5432/${EXPLORER_POSTGRES_DB:-clutch_explorer}
+      - APP_NODE_METRICS_URL=http://node1:3001/metrics
+      - APP_NODE_WS_URL=http://node1:8081
+      - APP_INDEXER_POLL_INTERVAL_MS=4000
+      - APP_INDEXER_START_HEIGHT=0
+      - APP_SEQ_URL=http://seq:80
+      - APP_SEQ_API_KEY=${SEQ_API_KEY:-}
+    restart: unless-stopped
+    networks:
+      - clutch-network
+
   explorer-backend:
     build:
       context: ./backend
@@ -7,11 +46,18 @@ services:
       - "8088:8088"
     environment:
       - APP_LOG_LEVEL=info
+      - APP_DATA_SOURCE=postgres
+      - APP_DATABASE_URL=postgres://${EXPLORER_POSTGRES_USER:-postgres}:${EXPLORER_POSTGRES_PASSWORD:-postgres}@explorer-postgres:5432/${EXPLORER_POSTGRES_DB:-clutch_explorer}
       - APP_CLUTCH_NODE_API_URL=http://node1:8081
       - APP_STRICT_MODE=true
       - APP_SEQ_URL=http://seq:80
       - APP_SEQ_API_KEY=${SEQ_API_KEY:-}
       - APP_ALLOWED_ORIGINS=*
+    depends_on:
+      explorer-postgres:
+        condition: service_healthy
+      explorer-indexer:
+        condition: service_started
     volumes:
       - ./backend/config:/app/config:ro
     healthcheck:
@@ -41,3 +87,6 @@ services:
 networks:
   clutch-network:
     external: true
+
+volumes:
+  explorer-postgres-data:

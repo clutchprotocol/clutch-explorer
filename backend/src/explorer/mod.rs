@@ -1,8 +1,15 @@
 pub mod app;
 pub mod configuration;
+pub mod db;
+pub mod error;
 pub mod handlers;
+pub mod indexer;
+pub mod ingestion;
 pub mod models;
 pub mod node_client;
+pub mod node_repository;
+pub mod postgres_repository;
+pub mod repository;
 pub mod seq;
 pub mod state;
 pub mod tracing;

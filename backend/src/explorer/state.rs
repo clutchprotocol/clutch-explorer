@@ -1,9 +1,14 @@
 use crate::explorer::configuration::AppConfig;
+use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
     AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionDetailDto,
     TransactionListItemDto, ValidatorDto,
 };
-use crate::explorer::node_client::{NodeClient, NodeClientError};
+use crate::explorer::node_client::NodeClient;
+use crate::explorer::node_repository::NodeRepository;
+use crate::explorer::postgres_repository::PostgresRepository;
+use crate::explorer::repository::ExplorerRepository;
+use sqlx::PgPool;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -12,13 +17,35 @@ pub struct AppState {
 }
 
 pub struct ExplorerService {
-    node_client: NodeClient,
+    repository: Arc<dyn ExplorerRepository>,
 }
 
 impl ExplorerService {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig, pg_pool: Option<PgPool>) -> Result<Self, ExplorerError> {
+        let repository: Arc<dyn ExplorerRepository> = match config.data_source.as_str() {
+            "postgres" => {
+                let pool = pg_pool
+                    .ok_or_else(|| ExplorerError::InvalidRequest("postgres pool missing".to_string()))?;
+                Arc::new(PostgresRepository::new(pool))
+            }
+            "node" => Arc::new(NodeRepository::new(NodeClient::new(
+                config.clutch_node_api_url,
+                config.strict_mode,
+            ))),
+            other => {
+                return Err(ExplorerError::InvalidRequest(format!(
+                    "unsupported data_source: {}",
+                    other
+                )))
+            }
+        };
+
+        Ok(Self { repository })
+    }
+
+    pub fn from_repository(repository: Arc<dyn ExplorerRepository>) -> Self {
         Self {
-            node_client: NodeClient::new(config.clutch_node_api_url, config.strict_mode),
+            repository,
         }
     }
 
@@ -26,12 +53,12 @@ impl ExplorerService {
         &self,
         limit: usize,
         offset: usize,
-    ) -> Result<Vec<BlockListItemDto>, NodeClientError> {
-        self.node_client.latest_blocks(limit, offset).await
+    ) -> Result<Vec<BlockListItemDto>, ExplorerError> {
+        self.repository.get_blocks(limit, offset).await
     }
 
-    pub async fn get_block(&self, id: &str) -> Result<BlockDetailDto, NodeClientError> {
-        self.node_client.block_by_id(id).await
+    pub async fn get_block(&self, id: &str) -> Result<BlockDetailDto, ExplorerError> {
+        self.repository.get_block(id.to_string()).await
     }
 
     pub async fn get_transactions(
@@ -40,64 +67,41 @@ impl ExplorerService {
         offset: usize,
         address: Option<&str>,
         status: Option<&str>,
-    ) -> Result<Vec<TransactionListItemDto>, NodeClientError> {
-        self.node_client
-            .latest_transactions(limit, offset, address, status)
+    ) -> Result<Vec<TransactionListItemDto>, ExplorerError> {
+        self.repository
+            .get_transactions(
+                limit,
+                offset,
+                address.map(ToString::to_string),
+                status.map(ToString::to_string),
+            )
             .await
     }
 
     pub async fn get_transaction(
         &self,
         hash: &str,
-    ) -> Result<TransactionDetailDto, NodeClientError> {
-        self.node_client.transaction_by_hash(hash).await
+    ) -> Result<TransactionDetailDto, ExplorerError> {
+        self.repository.get_transaction(hash.to_string()).await
     }
 
-    pub async fn get_account(&self, address: &str) -> Result<AccountDto, NodeClientError> {
-        self.node_client.account_by_address(address).await
+    pub async fn get_account(&self, address: &str) -> Result<AccountDto, ExplorerError> {
+        self.repository.get_account(address.to_string()).await
     }
 
     pub async fn get_validators(
         &self,
         limit: usize,
         offset: usize,
-    ) -> Result<Vec<ValidatorDto>, NodeClientError> {
-        self.node_client.validators(limit, offset).await
+    ) -> Result<Vec<ValidatorDto>, ExplorerError> {
+        self.repository.get_validators(limit, offset).await
     }
 
-    pub async fn get_stats(&self) -> Result<StatsDto, NodeClientError> {
-        self.node_client.stats().await
+    pub async fn get_stats(&self) -> Result<StatsDto, ExplorerError> {
+        self.repository.get_stats().await
     }
 
-    pub async fn search(&self, query: &str) -> Result<Vec<SearchResultDto>, NodeClientError> {
-        let q = query.trim();
-        let mut results = Vec::new();
-        if q.is_empty() {
-            return Ok(results);
-        }
-
-        if q.starts_with("0xtx") {
-            let tx = self.node_client.transaction_by_hash(q).await?;
-            results.push(SearchResultDto {
-                kind: "transaction".to_string(),
-                identifier: tx.hash,
-                summary: format!("Transaction in block {}", tx.block_height),
-            });
-        } else if q.starts_with("0x") {
-            let account = self.node_client.account_by_address(q).await?;
-            results.push(SearchResultDto {
-                kind: "account".to_string(),
-                identifier: account.address,
-                summary: format!("Account with {} txs", account.tx_count),
-            });
-        } else {
-            let block = self.node_client.block_by_id(q).await?;
-            results.push(SearchResultDto {
-                kind: "block".to_string(),
-                identifier: block.hash,
-                summary: format!("Block height {}", block.height),
-            });
-        }
-        Ok(results)
+    pub async fn search(&self, query: &str) -> Result<Vec<SearchResultDto>, ExplorerError> {
+        self.repository.search(query.to_string()).await
     }
 }

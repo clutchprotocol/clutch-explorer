@@ -1,3 +1,4 @@
+use crate::explorer::error::ExplorerError;
 use crate::explorer::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -6,7 +7,6 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 use crate::explorer::models::{ApiErrorDto, ListResponseDto, PagingDto};
-use crate::explorer::node_client::NodeClientError;
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -29,27 +29,34 @@ pub async fn ready() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({ "status": "ready" })))
 }
 
-fn map_error(err: NodeClientError) -> (StatusCode, Json<ApiErrorDto>) {
+fn map_error(err: ExplorerError) -> (StatusCode, Json<ApiErrorDto>) {
     match err {
-        NodeClientError::NotFound(message) => (
+        ExplorerError::NotFound(message) => (
             StatusCode::NOT_FOUND,
             Json(ApiErrorDto {
                 code: "not_found".to_string(),
                 message,
             }),
         ),
-        NodeClientError::InvalidRequest(message) => (
+        ExplorerError::InvalidRequest(message) => (
             StatusCode::BAD_REQUEST,
             Json(ApiErrorDto {
                 code: "invalid_request".to_string(),
                 message,
             }),
         ),
-        NodeClientError::Network(message) => (
+        ExplorerError::Upstream(message) => (
             StatusCode::BAD_GATEWAY,
             Json(ApiErrorDto {
                 code: "upstream_error".to_string(),
-                message: message.to_string(),
+                message,
+            }),
+        ),
+        ExplorerError::Storage(message) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiErrorDto {
+                code: "storage_error".to_string(),
+                message,
             }),
         ),
     }

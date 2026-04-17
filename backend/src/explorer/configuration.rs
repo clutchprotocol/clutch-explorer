@@ -7,6 +7,30 @@ fn default_strict_mode() -> bool {
     true
 }
 
+fn default_data_source() -> String {
+    "postgres".to_string()
+}
+
+fn default_database_url() -> String {
+    "postgres://postgres:postgres@localhost:5432/clutch_explorer".to_string()
+}
+
+fn default_node_metrics_url() -> String {
+    "http://node1:3001/metrics".to_string()
+}
+
+fn default_node_ws_url() -> String {
+    "http://node1:8081".to_string()
+}
+
+fn default_indexer_poll_interval_ms() -> u64 {
+    4000
+}
+
+fn default_indexer_start_height() -> u64 {
+    0
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub log_level: String,
@@ -17,6 +41,18 @@ pub struct AppConfig {
     pub allowed_origins: String,
     #[serde(default = "default_strict_mode")]
     pub strict_mode: bool,
+    #[serde(default = "default_data_source")]
+    pub data_source: String,
+    #[serde(default = "default_database_url")]
+    pub database_url: String,
+    #[serde(default = "default_node_metrics_url")]
+    pub node_metrics_url: String,
+    #[serde(default = "default_node_ws_url")]
+    pub node_ws_url: String,
+    #[serde(default = "default_indexer_poll_interval_ms")]
+    pub indexer_poll_interval_ms: u64,
+    #[serde(default = "default_indexer_start_height")]
+    pub indexer_start_height: u64,
 }
 
 impl AppConfig {
