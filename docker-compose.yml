@@ -1,0 +1,42 @@
+services:
+  explorer-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      - APP_LOG_LEVEL=info
+      - APP_CLUTCH_NODE_API_URL=http://node1:8081
+      - APP_SEQ_URL=http://seq:80
+      - APP_SEQ_API_KEY=${SEQ_API_KEY:-}
+      - APP_ALLOWED_ORIGINS=*
+    volumes:
+      - ./backend/config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - clutch-network
+
+  explorer-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_EXPLORER_API_URL: http://localhost:8088
+    ports:
+      - "5174:80"
+    depends_on:
+      - explorer-backend
+    restart: unless-stopped
+    networks:
+      - clutch-network
+
+networks:
+  clutch-network:
+    external: true
