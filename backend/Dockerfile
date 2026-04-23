@@ -18,6 +18,7 @@ RUN mkdir src && \
 
 COPY src ./src
 COPY config ./config
+COPY migrations ./migrations
 RUN cargo build --release
 
 FROM debian:bookworm-slim
