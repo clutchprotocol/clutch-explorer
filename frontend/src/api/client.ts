@@ -52,3 +52,4 @@ export const explorerApi = {
   search: (query: string) =>
     api<{ items: SearchResult[] }>(`/api/v1/search?q=${encodeURIComponent(query)}`),
 };
+
