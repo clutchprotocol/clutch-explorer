@@ -10,11 +10,15 @@ import type {
   Validator,
 } from "./types";
 
-const API_BASE =
+const RAW_API_BASE =
   import.meta.env.VITE_EXPLORER_API_URL ??
   (typeof window !== "undefined" && window.location.hostname === "localhost"
     ? "http://localhost:8088"
     : "/api");
+
+const API_BASE = RAW_API_BASE.endsWith("/api")
+  ? RAW_API_BASE
+  : `${RAW_API_BASE.replace(/\/+$/, "")}/api`;
 
 async function api<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
@@ -52,5 +56,7 @@ export const explorerApi = {
   search: (query: string) =>
     api<{ items: SearchResult[] }>(`/v1/search?q=${encodeURIComponent(query)}`),
 };
+
+
 
 
