@@ -8,18 +8,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/clutch-explorer-backend
 COPY Cargo.toml ./
-COPY Cargo.lock ./
 
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
-    cargo build --release --locked && \
+    cargo build --release && \
     rm -f target/release/clutch-explorer-backend target/release/clutch-explorer-backend.d && \
     rm -rf target/release/deps/clutch_explorer_backend* target/release/.fingerprint/clutch-explorer-backend-* && \
     rm -rf src
 
 COPY src ./src
 COPY config ./config
-RUN cargo build --release --locked
+RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
