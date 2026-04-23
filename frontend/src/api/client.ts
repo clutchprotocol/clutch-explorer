@@ -30,10 +30,10 @@ async function api<T>(path: string): Promise<T> {
 }
 
 export const explorerApi = {
-  getStats: () => api<Stats>("/api/v1/stats"),
+  getStats: () => api<Stats>("/v1/stats"),
   getBlocks: (limit = 20, offset = 0) =>
-    api<ListResponse<BlockListItem>>(`/api/v1/blocks?limit=${limit}&offset=${offset}`),
-  getBlockById: (id: string) => api<BlockDetail>(`/api/v1/blocks/${encodeURIComponent(id)}`),
+    api<ListResponse<BlockListItem>>(`/v1/blocks?limit=${limit}&offset=${offset}`),
+  getBlockById: (id: string) => api<BlockDetail>(`/v1/blocks/${encodeURIComponent(id)}`),
   getTransactions: (limit = 20, offset = 0, address?: string, status?: string) => {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -41,15 +41,16 @@ export const explorerApi = {
     });
     if (address) params.set("address", address);
     if (status) params.set("status", status);
-    return api<ListResponse<TransactionListItem>>(`/api/v1/transactions?${params.toString()}`);
+    return api<ListResponse<TransactionListItem>>(`/v1/transactions?${params.toString()}`);
   },
   getTransactionByHash: (hash: string) =>
-    api<TransactionDetail>(`/api/v1/transactions/${encodeURIComponent(hash)}`),
+    api<TransactionDetail>(`/v1/transactions/${encodeURIComponent(hash)}`),
   getAccountByAddress: (address: string) =>
-    api<Account>(`/api/v1/accounts/${encodeURIComponent(address)}`),
+    api<Account>(`/v1/accounts/${encodeURIComponent(address)}`),
   getValidators: (limit = 20, offset = 0) =>
-    api<ListResponse<Validator>>(`/api/v1/validators?limit=${limit}&offset=${offset}`),
+    api<ListResponse<Validator>>(`/v1/validators?limit=${limit}&offset=${offset}`),
   search: (query: string) =>
-    api<{ items: SearchResult[] }>(`/api/v1/search?q=${encodeURIComponent(query)}`),
+    api<{ items: SearchResult[] }>(`/v1/search?q=${encodeURIComponent(query)}`),
 };
+
 
