@@ -28,10 +28,10 @@ impl IndexerService {
     }
 
     async fn ensure_cursor(&self) -> Result<u64, ExplorerError> {
-        let existing = sqlx::query_scalar::<_, Option<i64>>(
+        let existing = sqlx::query_scalar::<_, i64>(
             "SELECT last_indexed_height FROM indexer_cursor WHERE id = 1",
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
