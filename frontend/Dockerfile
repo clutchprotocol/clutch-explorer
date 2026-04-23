@@ -5,7 +5,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-ARG VITE_EXPLORER_API_URL=http://localhost:8088
+ARG VITE_EXPLORER_API_URL=/api
 ENV VITE_EXPLORER_API_URL=$VITE_EXPLORER_API_URL
 RUN npm run build
 

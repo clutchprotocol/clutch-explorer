@@ -87,7 +87,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VITE_EXPLORER_API_URL=http://localhost:8088
+            VITE_EXPLORER_API_URL=/api
 
   trigger-stage-deploy:
     needs: [build-backend, build-frontend]

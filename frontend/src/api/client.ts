@@ -10,7 +10,11 @@ import type {
   Validator,
 } from "./types";
 
-const API_BASE = import.meta.env.VITE_EXPLORER_API_URL ?? "http://localhost:8088";
+const API_BASE =
+  import.meta.env.VITE_EXPLORER_API_URL ??
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8088"
+    : "/api");
 
 async function api<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
