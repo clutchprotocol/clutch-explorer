@@ -32,8 +32,9 @@ RUN groupadd -g 1000 clutch && \
 
 WORKDIR /app
 COPY --from=builder /usr/src/clutch-explorer-backend/target/release/clutch-explorer-backend /usr/local/bin/clutch-explorer-backend
+COPY --from=builder /usr/src/clutch-explorer-backend/target/release/indexer /usr/local/bin/indexer
 COPY --from=builder /usr/src/clutch-explorer-backend/config /app/config
-RUN chmod +x /usr/local/bin/clutch-explorer-backend && chown -R clutch:clutch /app
+RUN chmod +x /usr/local/bin/clutch-explorer-backend /usr/local/bin/indexer && chown -R clutch:clutch /app
 
 USER clutch
 EXPOSE 8088
