@@ -41,7 +41,7 @@ impl IndexerService {
 
         sqlx::query(
             "INSERT INTO indexer_cursor (id, last_indexed_height) VALUES (1, $1) ON CONFLICT (id) DO NOTHING",
-        )1
+        )
         .bind(self.start_height as i64)
         .execute(&self.pool)
         .await
