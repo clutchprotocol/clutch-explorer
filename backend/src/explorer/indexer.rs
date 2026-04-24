@@ -102,6 +102,22 @@ impl IndexerService {
         Ok(())
     }
 
+    async fn ensure_genesis_indexed(&self) -> Result<(), ExplorerError> {
+        let exists = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM blocks WHERE height = 0",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        if exists == 0 {
+            self.index_height(0).await?;
+            info!("indexed genesis block (height 0)");
+        }
+
+        Ok(())
+    }
+
     async fn index_height(&self, height: u64) -> Result<(), ExplorerError> {
         let block = self.source.fetch_block_by_height(height).await?;
         let producer = block.producer.clone();
@@ -172,10 +188,16 @@ impl IndexerService {
 
     pub async fn run(&self) -> Result<(), ExplorerError> {
         let mut cursor = self.ensure_cursor().await?;
+        self.ensure_genesis_indexed().await?;
         self.sync_validators_from_blocks().await?;
         info!("indexer starting from cursor {}", cursor);
 
         loop {
+            if cursor == 0 {
+                if let Err(err) = self.ensure_genesis_indexed().await {
+                    error!("failed to ensure genesis block is indexed: {}", err);
+                }
+            }
             match self.source.fetch_head().await {
                 Ok(head) => {
                     if head.height > cursor {
