@@ -147,7 +147,7 @@ impl ExplorerRepository for PostgresRepository {
 
             let mut where_clauses = Vec::new();
             if address.is_some() {
-                where_clauses.push("(from_address = $1 OR to_address = $1)");
+                where_clauses.push("(LOWER(from_address) = LOWER($1) OR LOWER(to_address) = LOWER($1))");
             }
             if status.is_some() {
                 where_clauses.push(if address.is_some() {
@@ -240,22 +240,48 @@ impl ExplorerRepository for PostgresRepository {
                 r#"
                 SELECT address, balance, nonce, tx_count, is_contract
                 FROM accounts
-                WHERE address = $1
+                WHERE LOWER(address) = LOWER($1)
                 "#,
             )
             .bind(&address)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?
-            .ok_or_else(|| ExplorerError::NotFound(format!("account {}", address)))?;
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
-            Ok(AccountDto {
-                address: row.address,
-                balance: row.balance as u64,
-                nonce: row.nonce as u64,
-                tx_count: row.tx_count as u64,
-                is_contract: row.is_contract,
-            })
+            if let Some(row) = row {
+                return Ok(AccountDto {
+                    address: row.address,
+                    balance: row.balance as u64,
+                    nonce: row.nonce as u64,
+                    tx_count: row.tx_count as u64,
+                    is_contract: row.is_contract,
+                });
+            }
+
+            // Fallback for addresses that exist only in tx history but not yet materialized in accounts table.
+            let tx_count = sqlx::query_scalar::<_, i64>(
+                r#"
+                SELECT COUNT(*)
+                FROM transactions
+                WHERE LOWER(from_address) = LOWER($1) OR LOWER(to_address) = LOWER($1)
+                "#,
+            )
+            .bind(&address)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+            if tx_count > 0 {
+                return Ok(AccountDto {
+                    address,
+                    balance: 0,
+                    nonce: 0,
+                    tx_count: tx_count as u64,
+                    is_contract: false,
+                });
+            }
+
+            Err(ExplorerError::NotFound(format!("account {}", address)))
         })
     }
 
