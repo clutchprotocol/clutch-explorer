@@ -47,6 +47,8 @@ pub struct AppConfig {
     pub strict_mode: bool,
     #[serde(default = "default_developer_mode")]
     pub developer_mode: bool,
+    #[serde(default = "default_developer_mode")]
+    pub cleanup_on_start: bool,
     #[serde(default = "default_data_source")]
     pub data_source: String,
     #[serde(default = "default_database_url")]

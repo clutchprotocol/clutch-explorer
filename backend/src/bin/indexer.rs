@@ -6,10 +6,10 @@ use explorer::configuration::AppConfig;
 use explorer::db::run_migrations;
 use explorer::indexer::IndexerService;
 use explorer::ingestion::NodeHttpIngestionSource;
+use explorer::shutdown::wait_for_shutdown;
 use explorer::tracing::setup_tracing;
 use sqlx::PgPool;
 use std::sync::Arc;
-use tokio::signal;
 use tracing::{error, info};
 
 #[derive(Parser, Debug)]
@@ -49,8 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 error!("Indexer service failed: {}", e);
             }
         }
-        _ = signal::ctrl_c() => {
-            info!("Shutdown signal received");
+        _ = wait_for_shutdown() => {
             if developer_mode {
                 info!("Developer mode enabled, clearing database data...");
                 if let Err(e) = explorer::db::cleanup_database(&pool).await {

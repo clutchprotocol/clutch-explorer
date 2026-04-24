@@ -4,12 +4,12 @@ use clap::Parser;
 use explorer::app::build_router;
 use explorer::configuration::AppConfig;
 use explorer::db::{cleanup_database, run_migrations};
+use explorer::shutdown::wait_for_shutdown;
 use explorer::state::{AppState, ExplorerService};
 use explorer::tracing::setup_tracing;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::signal;
 use tracing::{error, info};
 
 #[derive(Parser, Debug)]
@@ -27,6 +27,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pg_pool = if config.data_source == "postgres" {
         let pool = PgPool::connect(&config.database_url).await?;
+        
+        if config.cleanup_on_start {
+            info!("Cleanup on start enabled, clearing database data...");
+            if let Err(e) = cleanup_database(&pool).await {
+                error!("Failed to cleanup database on start: {}", e);
+            } else {
+                info!("Database cleared successfully on start");
+            }
+        }
+
         run_migrations(&pool).await?;
         Some(pool)
     } else {
@@ -45,10 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
-            signal::ctrl_c()
-                .await
-                .expect("failed to install CTRL+C handler");
-            info!("Shutdown signal received");
+            wait_for_shutdown().await;
 
             if developer_mode {
                 if let Some(pool) = pool_for_shutdown {

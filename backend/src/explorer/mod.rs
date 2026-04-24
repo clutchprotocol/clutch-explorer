@@ -13,3 +13,4 @@ pub mod repository;
 pub mod seq;
 pub mod state;
 pub mod tracing;
+pub mod shutdown;
