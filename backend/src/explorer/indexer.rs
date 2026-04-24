@@ -58,8 +58,53 @@ impl IndexerService {
         Ok(())
     }
 
+    async fn sync_validator_for_producer(&self, producer: &str) -> Result<(), ExplorerError> {
+        sqlx::query(
+            r#"
+            WITH producer_count AS (
+                SELECT COUNT(*)::BIGINT AS cnt
+                FROM blocks
+                WHERE producer = $1
+            )
+            INSERT INTO validators (address, is_active, blocks_produced, peer_id, updated_at)
+            VALUES ($1, TRUE, (SELECT cnt FROM producer_count), '', NOW())
+            ON CONFLICT (address) DO UPDATE SET
+                is_active = TRUE,
+                blocks_produced = EXCLUDED.blocks_produced,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(producer)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn sync_validators_from_blocks(&self) -> Result<(), ExplorerError> {
+        sqlx::query(
+            r#"
+            INSERT INTO validators (address, is_active, blocks_produced, peer_id, updated_at)
+            SELECT producer, TRUE, COUNT(*)::BIGINT, '', NOW()
+            FROM blocks
+            GROUP BY producer
+            ON CONFLICT (address) DO UPDATE SET
+                is_active = TRUE,
+                blocks_produced = EXCLUDED.blocks_produced,
+                updated_at = NOW()
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        Ok(())
+    }
+
     async fn index_height(&self, height: u64) -> Result<(), ExplorerError> {
         let block = self.source.fetch_block_by_height(height).await?;
+        let producer = block.producer.clone();
 
         sqlx::query(
             r#"
@@ -78,12 +123,14 @@ impl IndexerService {
         .bind(block.hash.clone())
         .bind(block.parent_hash)
         .bind(block.tx_count as i32)
-        .bind(block.producer)
+        .bind(producer.clone())
         .bind(block.timestamp)
         .bind(0i64)
         .execute(&self.pool)
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        self.sync_validator_for_producer(&producer).await?;
 
         let txs = self.source.fetch_transactions_by_block(height).await?;
         for tx in txs {
@@ -125,6 +172,7 @@ impl IndexerService {
 
     pub async fn run(&self) -> Result<(), ExplorerError> {
         let mut cursor = self.ensure_cursor().await?;
+        self.sync_validators_from_blocks().await?;
         info!("indexer starting from cursor {}", cursor);
 
         loop {
