@@ -31,6 +31,10 @@ fn default_indexer_start_height() -> u64 {
     0
 }
 
+fn default_developer_mode() -> bool {
+    false
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub log_level: String,
@@ -41,6 +45,8 @@ pub struct AppConfig {
     pub allowed_origins: String,
     #[serde(default = "default_strict_mode")]
     pub strict_mode: bool,
+    #[serde(default = "default_developer_mode")]
+    pub developer_mode: bool,
     #[serde(default = "default_data_source")]
     pub data_source: String,
     #[serde(default = "default_database_url")]

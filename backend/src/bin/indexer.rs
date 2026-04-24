@@ -9,7 +9,8 @@ use explorer::ingestion::NodeHttpIngestionSource;
 use explorer::tracing::setup_tracing;
 use sqlx::PgPool;
 use std::sync::Arc;
-use tracing::info;
+use tokio::signal;
+use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -33,12 +34,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
     let indexer = IndexerService::new(
         source,
-        pool,
+        pool.clone(),
         config.indexer_poll_interval_ms,
         config.indexer_start_height,
     );
 
+    let developer_mode = config.developer_mode;
+
     info!("explorer indexer started");
-    indexer.run().await?;
+
+    tokio::select! {
+        res = indexer.run() => {
+            if let Err(e) = res {
+                error!("Indexer service failed: {}", e);
+            }
+        }
+        _ = signal::ctrl_c() => {
+            info!("Shutdown signal received");
+            if developer_mode {
+                info!("Developer mode enabled, clearing database data...");
+                if let Err(e) = explorer::db::cleanup_database(&pool).await {
+                    error!("Failed to cleanup database: {}", e);
+                } else {
+                    info!("Database cleared successfully");
+                }
+            }
+        }
+    }
+
     Ok(())
 }
