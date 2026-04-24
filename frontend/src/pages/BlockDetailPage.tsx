@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { explorerApi } from "../api/client";
 import type { BlockDetail, TransactionListItem } from "../api/types";
 import { ErrorBanner, LoadingState, Panel } from "../components/ui";
@@ -7,6 +7,7 @@ import { formatRelativeTime, shortHash } from "../utils/format";
 
 export function BlockDetailPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const [block, setBlock] = useState<BlockDetail | null>(null);
   const [transactions, setTransactions] = useState<TransactionListItem[]>([]);
   const [error, setError] = useState("");
@@ -15,6 +16,10 @@ export function BlockDetailPage() {
   useEffect(() => {
     let disposed = false;
     const load = async () => {
+      if (!disposed) {
+        setLoading(true);
+        setError("");
+      }
       try {
         const [blockRes, txRes] = await Promise.all([
           explorerApi.getBlockById(id),
@@ -42,6 +47,15 @@ export function BlockDetailPage() {
     <div className="page-grid">
       <ErrorBanner message={error} />
       <Panel title={`Block #${block.height}`}>
+        <div className="pagination">
+          <button
+            onClick={() => navigate(`/blocks/${block.height - 1}`)}
+            disabled={block.height === 0}
+          >
+            Previous Block
+          </button>
+          <button onClick={() => navigate(`/blocks/${block.height + 1}`)}>Next Block</button>
+        </div>
         <dl className="detail-grid">
           <dt>Hash</dt>
           <dd>{block.hash}</dd>
