@@ -1,9 +1,11 @@
 use crate::explorer::error::ExplorerError;
 use chrono::{DateTime, TimeZone, Utc};
+use futures_util::{SinkExt, StreamExt};
 use reqwest::Client;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 pub type IngestFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, ExplorerError>> + Send + 'a>>;
@@ -76,19 +78,35 @@ impl NodeHttpIngestionSource {
             "id": 1
         });
 
-        // Node currently exposes a WS JSON-RPC interface; this HTTP endpoint is a scaffold
-        // contract surface for indexer portability.
-        let resp = self
-            .http
-            .post(&self.ws_url)
-            .json(&payload)
-            .send()
+        let (mut ws_stream, _) = connect_async(&self.ws_url)
             .await
             .map_err(|e| ExplorerError::Upstream(e.to_string()))?;
-        let value = resp
-            .json::<Value>()
+
+        ws_stream
+            .send(Message::Text(payload.to_string().into()))
             .await
             .map_err(|e| ExplorerError::Upstream(e.to_string()))?;
+
+        let frame = ws_stream
+            .next()
+            .await
+            .ok_or_else(|| ExplorerError::Upstream("empty rpc websocket response".to_string()))?
+            .map_err(|e| ExplorerError::Upstream(e.to_string()))?;
+
+        let text = match frame {
+            Message::Text(t) => t.to_string(),
+            Message::Binary(b) => String::from_utf8(b.to_vec())
+                .map_err(|e| ExplorerError::Upstream(e.to_string()))?,
+            _ => {
+                return Err(ExplorerError::Upstream(
+                    "unsupported rpc websocket frame".to_string(),
+                ))
+            }
+        };
+
+        let value = serde_json::from_str::<Value>(&text)
+            .map_err(|e| ExplorerError::Upstream(e.to_string()))?;
+
         Ok(value.get("result").cloned().unwrap_or(Value::Null))
     }
 

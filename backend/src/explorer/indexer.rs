@@ -41,7 +41,7 @@ impl IndexerService {
 
         sqlx::query(
             "INSERT INTO indexer_cursor (id, last_indexed_height) VALUES (1, $1) ON CONFLICT (id) DO NOTHING",
-        )
+        )1
         .bind(self.start_height as i64)
         .execute(&self.pool)
         .await
@@ -132,10 +132,18 @@ impl IndexerService {
                 Ok(head) => {
                     if head.height > cursor {
                         for h in (cursor + 1)..=head.height {
-                            self.index_height(h).await?;
-                            self.set_cursor(h).await?;
-                            cursor = h;
-                            info!("indexed height {}", h);
+                            match self.index_height(h).await {
+                                Ok(_) => {
+                                    self.set_cursor(h).await?;
+                                    cursor = h;
+                                    info!("indexed height {}", h);
+                                }
+                                Err(err) => {
+                                    // Keep the service alive and retry this height on the next poll.
+                                    error!("indexer failed to index height {}: {}", h, err);
+                                    break;
+                                }
+                            }
                         }
                     } else if head.height == cursor {
                         info!("indexer up to date at {}", cursor);

@@ -20,7 +20,7 @@ fn default_node_metrics_url() -> String {
 }
 
 fn default_node_ws_url() -> String {
-    "http://node1:8081".to_string()
+    "ws://node1:8081/ws".to_string()
 }
 
 fn default_indexer_poll_interval_ms() -> u64 {
