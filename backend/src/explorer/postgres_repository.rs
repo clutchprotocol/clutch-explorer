@@ -24,6 +24,8 @@ struct BlockRow {
     parent_hash: String,
     tx_count: i32,
     producer: String,
+    reward_recipient: String,
+    block_reward: i64,
     timestamp: DateTime<Utc>,
     total_fees: i64,
 }
@@ -64,7 +66,7 @@ impl ExplorerRepository for PostgresRepository {
         Box::pin(async move {
             let rows = sqlx::query_as::<_, BlockRow>(
                 r#"
-                SELECT height, hash, parent_hash, tx_count, producer, timestamp, total_fees
+                SELECT height, hash, parent_hash, tx_count, producer, reward_recipient, block_reward, timestamp, total_fees
                 FROM blocks
                 ORDER BY height DESC
                 LIMIT $1 OFFSET $2
@@ -83,6 +85,8 @@ impl ExplorerRepository for PostgresRepository {
                     hash: r.hash,
                     tx_count: r.tx_count as u32,
                     producer: r.producer,
+                    reward_recipient: r.reward_recipient,
+                    block_reward: r.block_reward as u64,
                     timestamp: r.timestamp,
                 })
                 .collect())
@@ -94,7 +98,7 @@ impl ExplorerRepository for PostgresRepository {
             let row = if let Ok(height) = id.parse::<i64>() {
                 sqlx::query_as::<_, BlockRow>(
                     r#"
-                    SELECT height, hash, parent_hash, tx_count, producer, timestamp, total_fees
+                    SELECT height, hash, parent_hash, tx_count, producer, reward_recipient, block_reward, timestamp, total_fees
                     FROM blocks
                     WHERE height = $1
                     "#,
@@ -106,7 +110,7 @@ impl ExplorerRepository for PostgresRepository {
             } else {
                 sqlx::query_as::<_, BlockRow>(
                     r#"
-                    SELECT height, hash, parent_hash, tx_count, producer, timestamp, total_fees
+                    SELECT height, hash, parent_hash, tx_count, producer, reward_recipient, block_reward, timestamp, total_fees
                     FROM blocks
                     WHERE hash = $1
                     "#,
@@ -124,6 +128,8 @@ impl ExplorerRepository for PostgresRepository {
                 parent_hash: row.parent_hash,
                 tx_count: row.tx_count as u32,
                 producer: row.producer,
+                reward_recipient: row.reward_recipient,
+                block_reward: row.block_reward as u64,
                 timestamp: row.timestamp,
                 total_fees: row.total_fees as u64,
             })
@@ -274,6 +280,42 @@ impl ExplorerRepository for PostgresRepository {
             if tx_count > 0 {
                 return Ok(AccountDto {
                     address,
+                    balance: 0,
+                    nonce: 0,
+                    tx_count: tx_count as u64,
+                    is_contract: false,
+                });
+            }
+
+            // Producer/validator addresses may appear in blocks even without account state or tx history.
+            let validator_address = sqlx::query_scalar::<_, Option<String>>(
+                r#"
+                SELECT address
+                FROM validators
+                WHERE LOWER(address) = LOWER($1)
+                LIMIT 1
+                "#,
+            )
+            .bind(&address)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+            let produced_blocks = sqlx::query_scalar::<_, i64>(
+                r#"
+                SELECT COUNT(*)
+                FROM blocks
+                WHERE LOWER(producer) = LOWER($1) OR LOWER(reward_recipient) = LOWER($1)
+                "#,
+            )
+            .bind(&address)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+            if validator_address.is_some() || produced_blocks > 0 {
+                return Ok(AccountDto {
+                    address: validator_address.unwrap_or(address),
                     balance: 0,
                     nonce: 0,
                     tx_count: tx_count as u64,

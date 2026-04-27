@@ -121,16 +121,20 @@ impl IndexerService {
     async fn index_height(&self, height: u64) -> Result<(), ExplorerError> {
         let block = self.source.fetch_block_by_height(height).await?;
         let producer = block.producer.clone();
+        let reward_recipient = block.reward_recipient.clone();
+        let block_reward = block.block_reward as i64;
 
         sqlx::query(
             r#"
-            INSERT INTO blocks (height, hash, parent_hash, tx_count, producer, timestamp, total_fees)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO blocks (height, hash, parent_hash, tx_count, producer, reward_recipient, block_reward, timestamp, total_fees)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (height) DO UPDATE SET
               hash = EXCLUDED.hash,
               parent_hash = EXCLUDED.parent_hash,
               tx_count = EXCLUDED.tx_count,
               producer = EXCLUDED.producer,
+              reward_recipient = EXCLUDED.reward_recipient,
+              block_reward = EXCLUDED.block_reward,
               timestamp = EXCLUDED.timestamp,
               total_fees = EXCLUDED.total_fees
             "#,
@@ -140,6 +144,8 @@ impl IndexerService {
         .bind(block.parent_hash)
         .bind(block.tx_count as i32)
         .bind(producer.clone())
+        .bind(reward_recipient)
+        .bind(block_reward)
         .bind(block.timestamp)
         .bind(0i64)
         .execute(&self.pool)

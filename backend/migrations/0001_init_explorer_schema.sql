@@ -4,9 +4,14 @@ CREATE TABLE IF NOT EXISTS blocks (
     parent_hash TEXT NOT NULL,
     tx_count INTEGER NOT NULL DEFAULT 0,
     producer TEXT NOT NULL,
+    reward_recipient TEXT NOT NULL DEFAULT '',
+    block_reward BIGINT NOT NULL DEFAULT 0,
     timestamp TIMESTAMPTZ NOT NULL,
     total_fees BIGINT NOT NULL DEFAULT 0
 );
+
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS reward_recipient TEXT NOT NULL DEFAULT '';
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS block_reward BIGINT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_blocks_hash ON blocks(hash);
 CREATE INDEX IF NOT EXISTS idx_blocks_timestamp_desc ON blocks(timestamp DESC);

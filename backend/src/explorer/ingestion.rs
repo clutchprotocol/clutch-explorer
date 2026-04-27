@@ -23,6 +23,8 @@ pub struct RawBlock {
     pub hash: String,
     pub parent_hash: String,
     pub producer: String,
+    pub reward_recipient: String,
+    pub block_reward: u64,
     pub tx_count: u32,
     pub timestamp: DateTime<Utc>,
 }
@@ -193,6 +195,7 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                 .filter(|v| !v.is_empty())
                 .unwrap_or("unknown")
                 .to_string();
+            let reward_recipient = producer.clone();
 
             let tx_count = block
                 .get("transactions")
@@ -205,12 +208,18 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                 .and_then(|v| v.as_u64())
                 .map(|v| Self::parse_timestamp(v as i64))
                 .unwrap_or_else(Utc::now);
+            let block_reward = block
+                .get("block_reward")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
 
             Ok(RawBlock {
                 height,
                 hash,
                 parent_hash,
                 producer,
+                reward_recipient,
+                block_reward,
                 tx_count,
                 timestamp,
             })

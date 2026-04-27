@@ -15,6 +15,8 @@ export type BlockListItem = {
   hash: string;
   tx_count: number;
   producer: string;
+  reward_recipient: string;
+  block_reward: number;
   timestamp: string;
 };
 

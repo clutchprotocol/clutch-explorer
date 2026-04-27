@@ -46,7 +46,8 @@ export function BlocksPage() {
             <th>Height</th>
             <th>Hash</th>
             <th>Transactions</th>
-            <th>Producer</th>
+            <th>Reward Recipient</th>
+            <th>Block Reward</th>
             <th>Age</th>
           </tr>
         </thead>
@@ -59,8 +60,11 @@ export function BlocksPage() {
               <td>{shortHash(block.hash)}</td>
               <td>{block.tx_count}</td>
               <td>
-                <Link to={`/address/${block.producer}`}>{shortHash(block.producer)}</Link>
+                <Link to={`/address/${block.reward_recipient}`}>
+                  {shortHash(block.reward_recipient)}
+                </Link>
               </td>
+              <td>{block.block_reward}</td>
               <td>{formatRelativeTime(block.timestamp)}</td>
             </tr>
           ))}

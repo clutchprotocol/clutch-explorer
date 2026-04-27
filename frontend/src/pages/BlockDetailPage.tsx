@@ -67,6 +67,12 @@ export function BlockDetailPage() {
           <dd>
             <Link to={`/address/${block.producer}`}>{block.producer}</Link>
           </dd>
+          <dt>Reward Recipient</dt>
+          <dd>
+            <Link to={`/address/${block.reward_recipient}`}>{block.reward_recipient}</Link>
+          </dd>
+          <dt>Block Reward</dt>
+          <dd>{block.block_reward}</dd>
           <dt>Transactions</dt>
           <dd>{block.tx_count}</dd>
           <dt>Total Fees</dt>

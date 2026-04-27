@@ -7,6 +7,8 @@ pub struct BlockListItemDto {
     pub hash: String,
     pub tx_count: u32,
     pub producer: String,
+    pub reward_recipient: String,
+    pub block_reward: u64,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -17,6 +19,8 @@ pub struct BlockDetailDto {
     pub parent_hash: String,
     pub tx_count: u32,
     pub producer: String,
+    pub reward_recipient: String,
+    pub block_reward: u64,
     pub timestamp: DateTime<Utc>,
     pub total_fees: u64,
 }

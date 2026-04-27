@@ -82,6 +82,16 @@ impl NodeClient {
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string(),
+                        reward_recipient: item
+                            .get("reward_recipient")
+                            .and_then(|v| v.as_str())
+                            .or_else(|| item.get("producer").and_then(|v| v.as_str()))
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        block_reward: item
+                            .get("block_reward")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
                         timestamp: item
                             .get("timestamp")
                             .and_then(|v| v.as_str())
@@ -108,6 +118,8 @@ impl NodeClient {
                     hash: format!("0xblock{:064x}", height),
                     tx_count: (((offset + i) % 6) + 1) as u32,
                     producer: format!("0xvalidator{:040x}", (offset + i) % 5),
+                    reward_recipient: format!("0xvalidator{:040x}", (offset + i) % 5),
+                    block_reward: 0,
                     timestamp: now - chrono::TimeDelta::seconds((offset + i) as i64 * 6),
                 }
             })
@@ -137,6 +149,16 @@ impl NodeClient {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
                     .to_string(),
+                reward_recipient: payload
+                    .get("reward_recipient")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| payload.get("producer").and_then(|v| v.as_str()))
+                    .unwrap_or("unknown")
+                    .to_string(),
+                block_reward: payload
+                    .get("block_reward")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
                 timestamp: payload
                     .get("timestamp")
                     .and_then(|v| v.as_str())
@@ -158,6 +180,8 @@ impl NodeClient {
             parent_hash: format!("0xblock{:064x}", height.saturating_sub(1)),
             tx_count: 8,
             producer: "0xvalidator000000000000000000000000000000000001".to_string(),
+            reward_recipient: "0xvalidator000000000000000000000000000000000001".to_string(),
+            block_reward: 0,
             timestamp: Utc::now(),
             total_fees: 24,
         })
