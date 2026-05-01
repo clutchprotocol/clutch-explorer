@@ -39,6 +39,8 @@ struct TxRow {
     amount: i64,
     fee: i64,
     status: String,
+    function_call_type: String,
+    is_ride_related: bool,
     timestamp: DateTime<Utc>,
     nonce: i64,
     tx_index: i32,
@@ -146,7 +148,7 @@ impl ExplorerRepository for PostgresRepository {
         Box::pin(async move {
             let mut sql = String::from(
                 r#"
-                SELECT hash, block_height, from_address, to_address, amount, fee, status, timestamp, nonce, tx_index
+                SELECT hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index
                 FROM transactions
                 "#,
             );
@@ -204,6 +206,8 @@ impl ExplorerRepository for PostgresRepository {
                     amount: r.amount as u64,
                     fee: r.fee as u64,
                     status: r.status,
+                    function_call_type: r.function_call_type,
+                    is_ride_related: r.is_ride_related,
                     timestamp: r.timestamp,
                 })
                 .collect())
@@ -214,7 +218,7 @@ impl ExplorerRepository for PostgresRepository {
         Box::pin(async move {
             let row = sqlx::query_as::<_, TxRow>(
                 r#"
-                SELECT hash, block_height, from_address, to_address, amount, fee, status, timestamp, nonce, tx_index
+                SELECT hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index
                 FROM transactions
                 WHERE hash = $1
                 "#,
@@ -233,6 +237,8 @@ impl ExplorerRepository for PostgresRepository {
                 amount: row.amount as u64,
                 fee: row.fee as u64,
                 status: row.status,
+                function_call_type: row.function_call_type,
+                is_ride_related: row.is_ride_related,
                 timestamp: row.timestamp,
                 nonce: row.nonce as u64,
                 tx_index: row.tx_index as u32,

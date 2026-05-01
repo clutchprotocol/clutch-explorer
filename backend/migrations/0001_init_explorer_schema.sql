@@ -24,10 +24,15 @@ CREATE TABLE IF NOT EXISTS transactions (
     amount BIGINT NOT NULL DEFAULT 0,
     fee BIGINT NOT NULL DEFAULT 0,
     status TEXT NOT NULL,
+    function_call_type TEXT NOT NULL DEFAULT 'Transfer',
+    is_ride_related BOOLEAN NOT NULL DEFAULT FALSE,
     timestamp TIMESTAMPTZ NOT NULL,
     nonce BIGINT NOT NULL DEFAULT 0,
     tx_index INTEGER NOT NULL DEFAULT 0
 );
+
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS function_call_type TEXT NOT NULL DEFAULT 'Transfer';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_ride_related BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_block_height ON transactions(block_height DESC, tx_index ASC);
 CREATE INDEX IF NOT EXISTS idx_transactions_from_address ON transactions(from_address);

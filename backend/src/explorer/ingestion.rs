@@ -38,6 +38,8 @@ pub struct RawTransaction {
     pub amount: u64,
     pub fee: u64,
     pub status: String,
+    pub function_call_type: String,
+    pub is_ride_related: bool,
     pub nonce: u64,
     pub tx_index: u32,
     pub timestamp: DateTime<Utc>,
@@ -125,6 +127,20 @@ impl NodeHttpIngestionSource {
             .or_else(|| arguments.get("fare").and_then(|v| v.as_u64()))
             .or_else(|| arguments.get("amount").and_then(|v| v.as_u64()))
             .unwrap_or(0)
+    }
+
+    fn is_ride_function(function_call_type: &str) -> bool {
+        matches!(
+            function_call_type,
+            "RideRequest"
+                | "RideOffer"
+                | "RideAcceptance"
+                | "RidePay"
+                | "RideCancel"
+                | "RideRequestCancel"
+                | "ConfirmArrival"
+                | "ComplainArrival"
+        )
     }
 }
 
@@ -259,6 +275,13 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     .unwrap_or_else(|| format!("0x{}{:08x}", height, idx));
 
                 let nonce = tx.get("nonce").and_then(|v| v.as_u64()).unwrap_or(0);
+                let function_call_type = tx
+                    .get("data")
+                    .and_then(|d| d.get("function_call_type"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Transfer")
+                    .to_string();
+                let is_ride_related = Self::is_ride_function(&function_call_type);
 
                 let arguments = tx
                     .get("data")
@@ -282,6 +305,8 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     amount,
                     fee: 0,
                     status: "confirmed".to_string(),
+                    function_call_type,
+                    is_ride_related,
                     nonce,
                     tx_index: idx as u32,
                     timestamp: block_ts,

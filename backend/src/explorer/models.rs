@@ -34,6 +34,8 @@ pub struct TransactionListItemDto {
     pub amount: u64,
     pub fee: u64,
     pub status: String,
+    pub function_call_type: String,
+    pub is_ride_related: bool,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -46,6 +48,8 @@ pub struct TransactionDetailDto {
     pub amount: u64,
     pub fee: u64,
     pub status: String,
+    pub function_call_type: String,
+    pub is_ride_related: bool,
     pub timestamp: DateTime<Utc>,
     pub nonce: u64,
     pub tx_index: u32,

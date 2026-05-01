@@ -211,9 +211,9 @@ impl IndexerService {
             sqlx::query(
                 r#"
                 INSERT INTO transactions (
-                    hash, block_height, from_address, to_address, amount, fee, status, timestamp, nonce, tx_index
+                    hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index
                 )
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
                 ON CONFLICT (hash) DO UPDATE SET
                     block_height = EXCLUDED.block_height,
                     from_address = EXCLUDED.from_address,
@@ -221,6 +221,8 @@ impl IndexerService {
                     amount = EXCLUDED.amount,
                     fee = EXCLUDED.fee,
                     status = EXCLUDED.status,
+                    function_call_type = EXCLUDED.function_call_type,
+                    is_ride_related = EXCLUDED.is_ride_related,
                     timestamp = EXCLUDED.timestamp,
                     nonce = EXCLUDED.nonce,
                     tx_index = EXCLUDED.tx_index
@@ -233,6 +235,8 @@ impl IndexerService {
             .bind(tx.amount as i64)
             .bind(tx.fee as i64)
             .bind(tx.status)
+            .bind(tx.function_call_type)
+            .bind(tx.is_ride_related)
             .bind(tx.timestamp)
             .bind(tx.nonce as i64)
             .bind(tx.tx_index as i32)

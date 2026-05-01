@@ -142,6 +142,20 @@ button {
   font-size: 11px;
 }
 
+.ride-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid #2f8d53;
+  background: #123825;
+  color: #c2f5d7;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .status-pill.failed {
   background: #4e1f2b;
   border-color: #923548;

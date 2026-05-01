@@ -77,6 +77,11 @@ export function TransactionsPage() {
             <tr key={tx.hash}>
               <td>
                 <Link to={`/txs/${tx.hash}`}>{shortHash(tx.hash)}</Link>
+                {tx.is_ride_related && (
+                  <span className="ride-badge" title={tx.function_call_type}>
+                    🚕 RIDE
+                  </span>
+                )}
               </td>
               <td>
                 <Link to={`/blocks/${tx.block_height}`}>{tx.block_height}</Link>

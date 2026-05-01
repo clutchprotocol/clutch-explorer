@@ -234,6 +234,15 @@ impl NodeClient {
                             .and_then(|v| v.as_str())
                             .unwrap_or("confirmed")
                             .to_string(),
+                        function_call_type: item
+                            .get("function_call_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Transfer")
+                            .to_string(),
+                        is_ride_related: item
+                            .get("is_ride_related")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false),
                         timestamp: item
                             .get("timestamp")
                             .and_then(|v| v.as_str())
@@ -264,6 +273,8 @@ impl NodeClient {
                 amount: 100 + index as u64,
                 fee: 1,
                 status: status.unwrap_or("confirmed").to_string(),
+                function_call_type: "Transfer".to_string(),
+                is_ride_related: false,
                 timestamp: now - chrono::TimeDelta::seconds(index as i64 * 4),
                 }
             })
@@ -302,6 +313,15 @@ impl NodeClient {
                     .and_then(|v| v.as_str())
                     .unwrap_or("confirmed")
                     .to_string(),
+                function_call_type: payload
+                    .get("function_call_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Transfer")
+                    .to_string(),
+                is_ride_related: payload
+                    .get("is_ride_related")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
                 timestamp: payload
                     .get("timestamp")
                     .and_then(|v| v.as_str())
@@ -325,6 +345,8 @@ impl NodeClient {
             amount: 120,
             fee: 1,
             status: "confirmed".to_string(),
+            function_call_type: "Transfer".to_string(),
+            is_ride_related: false,
             timestamp: Utc::now(),
             nonce: 78,
             tx_index: 3,

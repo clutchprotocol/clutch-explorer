@@ -33,6 +33,8 @@ export type TransactionListItem = {
   amount: number;
   fee: number;
   status: string;
+  function_call_type: string;
+  is_ride_related: boolean;
   timestamp: string;
 };
 

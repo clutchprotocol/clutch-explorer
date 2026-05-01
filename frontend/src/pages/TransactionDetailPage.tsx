@@ -79,9 +79,16 @@ export function TransactionDetailPage() {
         <dt>Status</dt>
         <dd>
           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+          {item.is_ride_related && (
+            <span className="ride-badge" title={item.function_call_type}>
+              🚕 RIDE
+            </span>
+          )}
         </dd>
         <dt>Confirmations</dt>
         <dd>{isConfirmed ? (confirmations ?? "-") : 0}</dd>
+        <dt>Action Type</dt>
+        <dd>{item.function_call_type}</dd>
         <dt>Block</dt>
         <dd>
           <Link to={`/blocks/${item.block_height}`}>{item.block_height}</Link>
