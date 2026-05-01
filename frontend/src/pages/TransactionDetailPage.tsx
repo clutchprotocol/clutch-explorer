@@ -8,6 +8,7 @@ import { formatRelativeTime, shortHash } from "../utils/format";
 export function TransactionDetailPage() {
   const { hash = "" } = useParams();
   const [item, setItem] = useState<TransactionDetail | null>(null);
+  const [latestHeight, setLatestHeight] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -15,9 +16,13 @@ export function TransactionDetailPage() {
     let disposed = false;
     const load = async () => {
       try {
-        const response = await explorerApi.getTransactionByHash(hash);
+        const [response, stats] = await Promise.all([
+          explorerApi.getTransactionByHash(hash),
+          explorerApi.getStats(),
+        ]);
         if (disposed) return;
         setItem(response);
+        setLatestHeight(stats.latest_height);
       } catch (err) {
         if (!disposed) setError((err as Error).message);
       } finally {
@@ -30,8 +35,40 @@ export function TransactionDetailPage() {
     };
   }, [hash]);
 
+  useEffect(() => {
+    if (!item) return;
+
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const stats = await explorerApi.getStats();
+        if (!disposed) {
+          setLatestHeight(stats.latest_height);
+        }
+      } catch {
+        // Keep existing confirmation value on transient polling failures.
+      }
+    };
+
+    const intervalId = window.setInterval(poll, 5000);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [item]);
+
   if (loading) return <LoadingState />;
   if (!item) return <ErrorBanner message="Transaction not found" />;
+
+  const confirmations =
+    latestHeight === null
+      ? null
+      : Math.max(0, latestHeight - item.block_height + 1);
+  const isConfirmed = item.status.toLowerCase() === "confirmed";
+  const statusLabel =
+    isConfirmed && confirmations !== null
+      ? `Confirmed (${confirmations} confirmations)`
+      : item.status;
 
   return (
     <Panel title={`Transaction ${shortHash(item.hash)}`}>
@@ -41,8 +78,10 @@ export function TransactionDetailPage() {
         <dd>{item.hash}</dd>
         <dt>Status</dt>
         <dd>
-          <span className={`status-pill ${item.status}`}>{item.status}</span>
+          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
         </dd>
+        <dt>Confirmations</dt>
+        <dd>{isConfirmed ? (confirmations ?? "-") : 0}</dd>
         <dt>Block</dt>
         <dd>
           <Link to={`/blocks/${item.block_height}`}>{item.block_height}</Link>
