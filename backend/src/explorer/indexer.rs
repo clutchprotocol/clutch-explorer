@@ -1,6 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::ingestion::NodeIngestionSource;
 use sqlx::PgPool;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
@@ -118,6 +119,50 @@ impl IndexerService {
         Ok(())
     }
 
+    async fn sync_account_snapshot(&self, address: &str) -> Result<(), ExplorerError> {
+        if address.trim().is_empty() || address == "unknown" {
+            return Ok(());
+        }
+
+        let snapshot = self
+            .source
+            .fetch_account_snapshot(address.to_string())
+            .await?;
+
+        let tx_count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM transactions
+            WHERE LOWER(from_address) = LOWER($1) OR LOWER(to_address) = LOWER($1)
+            "#,
+        )
+        .bind(address)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO accounts (address, balance, nonce, tx_count, is_contract, updated_at)
+            VALUES ($1, $2, $3, $4, FALSE, NOW())
+            ON CONFLICT (address) DO UPDATE SET
+                balance = EXCLUDED.balance,
+                nonce = EXCLUDED.nonce,
+                tx_count = EXCLUDED.tx_count,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(snapshot.address)
+        .bind(snapshot.balance as i64)
+        .bind(snapshot.nonce as i64)
+        .bind(tx_count)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        Ok(())
+    }
+
     async fn index_height(&self, height: u64) -> Result<(), ExplorerError> {
         let block = self.source.fetch_block_by_height(height).await?;
         let producer = block.producer.clone();
@@ -155,7 +200,14 @@ impl IndexerService {
         self.sync_validator_for_producer(&producer).await?;
 
         let txs = self.source.fetch_transactions_by_block(height).await?;
+        let mut addresses_to_sync: HashSet<String> = HashSet::new();
+        addresses_to_sync.insert(producer);
+        addresses_to_sync.insert(block.reward_recipient);
+
         for tx in txs {
+            let from_address = tx.from.clone();
+            let to_address = tx.to.clone();
+
             sqlx::query(
                 r#"
                 INSERT INTO transactions (
@@ -187,6 +239,15 @@ impl IndexerService {
             .execute(&self.pool)
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+            addresses_to_sync.insert(from_address);
+            addresses_to_sync.insert(to_address);
+        }
+
+        for address in addresses_to_sync {
+            if let Err(err) = self.sync_account_snapshot(&address).await {
+                error!("failed to sync account snapshot for {}: {}", address, err);
+            }
         }
 
         Ok(())

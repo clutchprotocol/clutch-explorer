@@ -303,7 +303,8 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                 .await?
                 .get("nonce")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0);
+                .unwrap_or(0)
+                .saturating_sub(1);
             Ok(RawAccountSnapshot {
                 address,
                 balance,
