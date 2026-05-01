@@ -65,7 +65,11 @@ export function BlockDetailPage() {
           </dd>
           <dt>Producer</dt>
           <dd>
-            <Link to={`/address/${block.producer}`}>{block.producer}</Link>
+            {block.height === 0 ? (
+              "Genesis"
+            ) : (
+              <Link to={`/address/${block.producer}`}>{block.producer}</Link>
+            )}
           </dd>
           <dt>Reward Recipient</dt>
           <dd>

@@ -60,9 +60,13 @@ export function BlocksPage() {
               <td>{shortHash(block.hash)}</td>
               <td>{block.tx_count}</td>
               <td>
-                <Link to={`/address/${block.reward_recipient}`}>
-                  {shortHash(block.reward_recipient)}
-                </Link>
+                {block.height === 0 ? (
+                  "Genesis"
+                ) : (
+                  <Link to={`/address/${block.reward_recipient}`}>
+                    {shortHash(block.reward_recipient)}
+                  </Link>
+                )}
               </td>
               <td>{block.block_reward}</td>
               <td>{formatRelativeTime(block.timestamp)}</td>
