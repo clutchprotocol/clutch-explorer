@@ -14,6 +14,11 @@ pub struct IndexerService {
 }
 
 impl IndexerService {
+    fn is_real_validator_address(address: &str) -> bool {
+        let trimmed = address.trim();
+        !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("unknown")
+    }
+
     pub fn new(
         source: Arc<dyn NodeIngestionSource>,
         pool: PgPool,
@@ -60,6 +65,10 @@ impl IndexerService {
     }
 
     async fn sync_validator_for_producer(&self, producer: &str) -> Result<(), ExplorerError> {
+        if !Self::is_real_validator_address(producer) {
+            return Ok(());
+        }
+
         sqlx::query(
             r#"
             WITH producer_count AS (
@@ -89,6 +98,7 @@ impl IndexerService {
             INSERT INTO validators (address, is_active, blocks_produced, peer_id, updated_at)
             SELECT producer, TRUE, COUNT(*)::BIGINT, '', NOW()
             FROM blocks
+            WHERE TRIM(producer) <> '' AND LOWER(producer) <> 'unknown'
             GROUP BY producer
             ON CONFLICT (address) DO UPDATE SET
                 is_active = TRUE,
@@ -201,8 +211,12 @@ impl IndexerService {
 
         let txs = self.source.fetch_transactions_by_block(height).await?;
         let mut addresses_to_sync: HashSet<String> = HashSet::new();
-        addresses_to_sync.insert(producer);
-        addresses_to_sync.insert(block.reward_recipient);
+        if Self::is_real_validator_address(&producer) {
+            addresses_to_sync.insert(producer);
+        }
+        if Self::is_real_validator_address(&block.reward_recipient) {
+            addresses_to_sync.insert(block.reward_recipient);
+        }
 
         for tx in txs {
             let from_address = tx.from.clone();

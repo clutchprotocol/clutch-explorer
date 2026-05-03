@@ -248,6 +248,10 @@ impl ExplorerRepository for PostgresRepository {
 
     fn get_account(&self, address: String) -> RepoFuture<'_, AccountDto> {
         Box::pin(async move {
+            if address.trim().is_empty() || address.eq_ignore_ascii_case("unknown") {
+                return Err(ExplorerError::NotFound(format!("account {}", address)));
+            }
+
             let row = sqlx::query_as::<_, AccountRow>(
                 r#"
                 SELECT address, balance, nonce, tx_count, is_contract
@@ -298,7 +302,7 @@ impl ExplorerRepository for PostgresRepository {
                 r#"
                 SELECT address
                 FROM validators
-                WHERE LOWER(address) = LOWER($1)
+                WHERE LOWER(address) = LOWER($1) AND TRIM(address) <> '' AND LOWER(address) <> 'unknown'
                 LIMIT 1
                 "#,
             )
@@ -311,7 +315,8 @@ impl ExplorerRepository for PostgresRepository {
                 r#"
                 SELECT COUNT(*)
                 FROM blocks
-                WHERE LOWER(producer) = LOWER($1) OR LOWER(reward_recipient) = LOWER($1)
+                WHERE (LOWER(producer) = LOWER($1) OR LOWER(reward_recipient) = LOWER($1))
+                  AND LOWER($1) <> 'unknown'
                 "#,
             )
             .bind(&address)
@@ -339,6 +344,7 @@ impl ExplorerRepository for PostgresRepository {
                 r#"
                 SELECT address, is_active, blocks_produced, peer_id
                 FROM validators
+                WHERE TRIM(address) <> '' AND LOWER(address) <> 'unknown'
                 ORDER BY blocks_produced DESC
                 LIMIT $1 OFFSET $2
                 "#,
@@ -375,7 +381,9 @@ impl ExplorerRepository for PostgresRepository {
                 .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
             let active_validators =
-                sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM validators WHERE is_active = TRUE")
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM validators WHERE is_active = TRUE AND TRIM(address) <> '' AND LOWER(address) <> 'unknown'",
+                )
                     .fetch_one(&self.pool)
                     .await
                     .map_err(|e| ExplorerError::Storage(e.to_string()))?;
