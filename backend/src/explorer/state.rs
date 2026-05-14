@@ -20,6 +20,7 @@ pub struct ExplorerService {
     repository: Arc<dyn ExplorerRepository>,
 }
 
+#[allow(clippy::missing_errors_doc)] // Thin wrappers over ExplorerRepository; errors are defined there.
 impl ExplorerService {
     pub fn new(config: AppConfig, pg_pool: Option<PgPool>) -> Result<Self, ExplorerError> {
         let repository: Arc<dyn ExplorerRepository> = match config.data_source.as_str() {
@@ -34,8 +35,7 @@ impl ExplorerService {
             ))),
             other => {
                 return Err(ExplorerError::InvalidRequest(format!(
-                    "unsupported data_source: {}",
-                    other
+                    "unsupported data_source: {other}"
                 )))
             }
         };
@@ -66,8 +66,8 @@ impl ExplorerService {
             .get_transactions(
                 limit,
                 offset,
-                address.map(ToString::to_string),
-                status.map(ToString::to_string),
+                address.map(String::from),
+                status.map(String::from),
             )
             .await
     }
