@@ -43,12 +43,6 @@ impl ExplorerService {
         Ok(Self { repository })
     }
 
-    pub fn from_repository(repository: Arc<dyn ExplorerRepository>) -> Self {
-        Self {
-            repository,
-        }
-    }
-
     pub async fn get_blocks(
         &self,
         limit: usize,

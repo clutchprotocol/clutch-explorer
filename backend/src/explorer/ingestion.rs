@@ -87,7 +87,7 @@ impl NodeHttpIngestionSource {
             .map_err(|e| ExplorerError::Upstream(e.to_string()))?;
 
         ws_stream
-            .send(Message::Text(payload.to_string().into()))
+            .send(Message::Text(payload.to_string()))
             .await
             .map_err(|e| ExplorerError::Upstream(e.to_string()))?;
 

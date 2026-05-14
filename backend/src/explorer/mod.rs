@@ -10,6 +10,7 @@ pub mod node_client;
 pub mod node_repository;
 pub mod postgres_repository;
 pub mod repository;
+pub mod run;
 pub mod seq;
 pub mod state;
 pub mod tracing;

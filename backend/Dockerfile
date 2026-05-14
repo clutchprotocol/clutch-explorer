@@ -6,20 +6,33 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Slow / flaky links to crates.io (common in Docker Desktop): more retries and a longer HTTP timeout.
+ENV CARGO_NET_RETRY=10
+ENV CARGO_HTTP_TIMEOUT=300
+
 WORKDIR /usr/src/clutch-explorer-backend
 COPY Cargo.toml ./
 
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
+# Warm the dependency cache: stub lib + both binaries match the real layout ([lib] + src/main.rs + src/bin/indexer.rs).
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    mkdir -p src/bin && \
+    printf '%s\n' '//! Dependency cache layer stub.' '#[allow(dead_code)]' 'pub mod explorer {}' > src/lib.rs && \
+    echo 'fn main() {}' > src/main.rs && \
+    echo 'fn main() {}' > src/bin/indexer.rs && \
     cargo build --release && \
-    rm -f target/release/clutch-explorer-backend target/release/clutch-explorer-backend.d && \
-    rm -rf target/release/deps/clutch_explorer_backend* target/release/.fingerprint/clutch-explorer-backend-* && \
+    rm -f target/release/clutch-explorer-backend target/release/clutch-explorer-backend.d \
+        target/release/indexer target/release/indexer.d && \
+    rm -rf target/release/deps/clutch_explorer_backend* target/release/deps/indexer-* \
+        target/release/.fingerprint/clutch-explorer-backend-* target/release/.fingerprint/indexer-* && \
     rm -rf src
 
 COPY src ./src
 COPY config ./config
 COPY migrations ./migrations
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
