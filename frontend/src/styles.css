@@ -197,3 +197,9 @@ button {
 .muted {
   color: #90a7ce;
 }
+
+.referrer-fee-line {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  color: #b8cce8;
+}

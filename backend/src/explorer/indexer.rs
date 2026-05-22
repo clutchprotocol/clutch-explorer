@@ -1,5 +1,6 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::ingestion::NodeIngestionSource;
+use crate::explorer::referrer::enrich_transactions;
 use sqlx::PgPool;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -11,6 +12,8 @@ pub struct IndexerService {
     pool: PgPool,
     poll_interval_ms: u64,
     start_height: u64,
+    ride_request_referrer_fee_percent: u8,
+    ride_offer_referrer_fee_percent: u8,
 }
 
 impl IndexerService {
@@ -24,12 +27,16 @@ impl IndexerService {
         pool: PgPool,
         poll_interval_ms: u64,
         start_height: u64,
+        ride_request_referrer_fee_percent: u8,
+        ride_offer_referrer_fee_percent: u8,
     ) -> Self {
         Self {
             source,
             pool,
             poll_interval_ms,
             start_height,
+            ride_request_referrer_fee_percent,
+            ride_offer_referrer_fee_percent,
         }
     }
 
@@ -209,7 +216,15 @@ impl IndexerService {
 
         self.sync_validator_for_producer(&producer).await?;
 
-        let txs = self.source.fetch_transactions_by_block(height).await?;
+        let mut txs = self.source.fetch_transactions_by_block(height).await?;
+        enrich_transactions(
+            &self.pool,
+            &mut txs,
+            self.ride_request_referrer_fee_percent,
+            self.ride_offer_referrer_fee_percent,
+        )
+        .await;
+
         let mut addresses_to_sync: HashSet<String> = HashSet::new();
         if Self::is_real_validator_address(&producer) {
             addresses_to_sync.insert(producer);
@@ -225,9 +240,10 @@ impl IndexerService {
             sqlx::query(
                 r#"
                 INSERT INTO transactions (
-                    hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index
+                    hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index,
+                    referrer, request_referrer, offer_referrer, request_referrer_fee, offer_referrer_fee, payload_json
                 )
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
                 ON CONFLICT (hash) DO UPDATE SET
                     block_height = EXCLUDED.block_height,
                     from_address = EXCLUDED.from_address,
@@ -239,7 +255,13 @@ impl IndexerService {
                     is_ride_related = EXCLUDED.is_ride_related,
                     timestamp = EXCLUDED.timestamp,
                     nonce = EXCLUDED.nonce,
-                    tx_index = EXCLUDED.tx_index
+                    tx_index = EXCLUDED.tx_index,
+                    referrer = EXCLUDED.referrer,
+                    request_referrer = EXCLUDED.request_referrer,
+                    offer_referrer = EXCLUDED.offer_referrer,
+                    request_referrer_fee = EXCLUDED.request_referrer_fee,
+                    offer_referrer_fee = EXCLUDED.offer_referrer_fee,
+                    payload_json = EXCLUDED.payload_json
                 "#,
             )
             .bind(tx.hash)
@@ -254,12 +276,27 @@ impl IndexerService {
             .bind(tx.timestamp)
             .bind(tx.nonce as i64)
             .bind(tx.tx_index as i32)
+            .bind(tx.referrer.as_deref())
+            .bind(tx.request_referrer.as_deref())
+            .bind(tx.offer_referrer.as_deref())
+            .bind(tx.request_referrer_fee as i64)
+            .bind(tx.offer_referrer_fee as i64)
+            .bind(tx.payload_json.as_deref())
             .execute(&self.pool)
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
             addresses_to_sync.insert(from_address);
             addresses_to_sync.insert(to_address);
+            if let Some(ref r) = tx.referrer {
+                addresses_to_sync.insert(r.clone());
+            }
+            if let Some(ref r) = tx.request_referrer {
+                addresses_to_sync.insert(r.clone());
+            }
+            if let Some(ref r) = tx.offer_referrer {
+                addresses_to_sync.insert(r.clone());
+            }
         }
 
         for address in addresses_to_sync {

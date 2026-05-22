@@ -105,6 +105,41 @@ export function TransactionDetailPage() {
         <dd>{item.amount}</dd>
         <dt>Fee</dt>
         <dd>{item.fee}</dd>
+        {item.referrer && (
+          <>
+            <dt>Referrer</dt>
+            <dd>
+              <Link to={`/address/${item.referrer}`}>{item.referrer}</Link>
+            </dd>
+          </>
+        )}
+        {item.function_call_type === "RidePay" &&
+          (item.request_referrer_fee ?? 0) + (item.offer_referrer_fee ?? 0) > 0 && (
+          <>
+            <dt>Referrer fees (CLT)</dt>
+            <dd>
+              {(item.request_referrer_fee ?? 0) + (item.offer_referrer_fee ?? 0)}
+              {item.request_referrer && item.request_referrer_fee ? (
+                <div className="referrer-fee-line">
+                  Request app:{" "}
+                  <Link to={`/address/${item.request_referrer}`}>
+                    {item.request_referrer}
+                  </Link>{" "}
+                  — {item.request_referrer_fee} CLT
+                </div>
+              ) : null}
+              {item.offer_referrer && item.offer_referrer_fee ? (
+                <div className="referrer-fee-line">
+                  Offer app:{" "}
+                  <Link to={`/address/${item.offer_referrer}`}>
+                    {item.offer_referrer}
+                  </Link>{" "}
+                  — {item.offer_referrer_fee} CLT
+                </div>
+              ) : null}
+            </dd>
+          </>
+        )}
         <dt>Nonce</dt>
         <dd>{item.nonce}</dd>
         <dt>Tx Index</dt>

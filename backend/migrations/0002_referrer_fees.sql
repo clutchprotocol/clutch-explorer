@@ -1,0 +1,6 @@
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS referrer TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS request_referrer TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS offer_referrer TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS request_referrer_fee BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS offer_referrer_fee BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payload_json TEXT;

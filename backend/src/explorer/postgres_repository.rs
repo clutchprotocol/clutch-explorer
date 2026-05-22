@@ -44,6 +44,11 @@ struct TxRow {
     timestamp: DateTime<Utc>,
     nonce: i64,
     tx_index: i32,
+    referrer: Option<String>,
+    request_referrer: Option<String>,
+    offer_referrer: Option<String>,
+    request_referrer_fee: i64,
+    offer_referrer_fee: i64,
 }
 
 #[derive(FromRow)]
@@ -148,7 +153,8 @@ impl ExplorerRepository for PostgresRepository {
         Box::pin(async move {
             let mut sql = String::from(
                 r#"
-                SELECT hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index
+                SELECT hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index,
+                       referrer, request_referrer, offer_referrer, request_referrer_fee, offer_referrer_fee
                 FROM transactions
                 "#,
             );
@@ -209,6 +215,9 @@ impl ExplorerRepository for PostgresRepository {
                     function_call_type: r.function_call_type,
                     is_ride_related: r.is_ride_related,
                     timestamp: r.timestamp,
+                    referrer: r.referrer,
+                    request_referrer_fee: r.request_referrer_fee as u64,
+                    offer_referrer_fee: r.offer_referrer_fee as u64,
                 })
                 .collect())
         })
@@ -218,7 +227,8 @@ impl ExplorerRepository for PostgresRepository {
         Box::pin(async move {
             let row = sqlx::query_as::<_, TxRow>(
                 r#"
-                SELECT hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index
+                SELECT hash, block_height, from_address, to_address, amount, fee, status, function_call_type, is_ride_related, timestamp, nonce, tx_index,
+                       referrer, request_referrer, offer_referrer, request_referrer_fee, offer_referrer_fee
                 FROM transactions
                 WHERE hash = $1
                 "#,
@@ -242,6 +252,11 @@ impl ExplorerRepository for PostgresRepository {
                 timestamp: row.timestamp,
                 nonce: row.nonce as u64,
                 tx_index: row.tx_index as u32,
+                referrer: row.referrer,
+                request_referrer: row.request_referrer,
+                offer_referrer: row.offer_referrer,
+                request_referrer_fee: row.request_referrer_fee as u64,
+                offer_referrer_fee: row.offer_referrer_fee as u64,
             })
         })
     }

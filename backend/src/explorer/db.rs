@@ -24,6 +24,25 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ExplorerError> {
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
+    let migration_sql_2 = include_str!("../../migrations/0002_referrer_fees.sql");
+    let mut tx2 = pool
+        .begin()
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+    for statement in migration_sql_2.split(';') {
+        let statement = statement.trim();
+        if statement.is_empty() {
+            continue;
+        }
+        sqlx::query(statement)
+            .execute(&mut *tx2)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+    }
+    tx2.commit()
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
     Ok(())
 }
 

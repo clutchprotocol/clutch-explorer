@@ -12,3 +12,7 @@ indexer_start_height = 0
 seq_url = "http://127.0.0.1:5341"
 seq_api_key = ""
 allowed_origins = "*"
+
+# Must match clutch-node config for accurate RidePay referrer fee display.
+ride_request_referrer_fee_percent = 1
+ride_offer_referrer_fee_percent = 1

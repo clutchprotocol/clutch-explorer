@@ -37,6 +37,9 @@ pub struct TransactionListItemDto {
     pub function_call_type: String,
     pub is_ride_related: bool,
     pub timestamp: DateTime<Utc>,
+    pub referrer: Option<String>,
+    pub request_referrer_fee: u64,
+    pub offer_referrer_fee: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -53,6 +56,11 @@ pub struct TransactionDetailDto {
     pub timestamp: DateTime<Utc>,
     pub nonce: u64,
     pub tx_index: u32,
+    pub referrer: Option<String>,
+    pub request_referrer: Option<String>,
+    pub offer_referrer: Option<String>,
+    pub request_referrer_fee: u64,
+    pub offer_referrer_fee: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

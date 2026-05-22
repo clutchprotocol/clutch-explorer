@@ -248,6 +248,18 @@ impl NodeClient {
                             .and_then(|v| v.as_str())
                             .and_then(|v| v.parse().ok())
                             .unwrap_or_else(Utc::now),
+                        referrer: item
+                            .get("referrer")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        request_referrer_fee: item
+                            .get("request_referrer_fee")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
+                        offer_referrer_fee: item
+                            .get("offer_referrer_fee")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
                     })
                     .collect::<Vec<_>>();
                 if !mapped.is_empty() {
@@ -276,6 +288,9 @@ impl NodeClient {
                 function_call_type: "Transfer".to_string(),
                 is_ride_related: false,
                 timestamp: now - chrono::TimeDelta::seconds(index as i64 * 4),
+                referrer: None,
+                request_referrer_fee: 0,
+                offer_referrer_fee: 0,
                 }
             })
             .collect())
@@ -329,6 +344,26 @@ impl NodeClient {
                     .unwrap_or_else(Utc::now),
                 nonce: payload.get("nonce").and_then(|v| v.as_u64()).unwrap_or(0),
                 tx_index: payload.get("tx_index").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                referrer: payload
+                    .get("referrer")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                request_referrer: payload
+                    .get("request_referrer")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                offer_referrer: payload
+                    .get("offer_referrer")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                request_referrer_fee: payload
+                    .get("request_referrer_fee")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                offer_referrer_fee: payload
+                    .get("offer_referrer_fee")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
             });
         }
         if self.strict_mode {
@@ -350,6 +385,11 @@ impl NodeClient {
             timestamp: Utc::now(),
             nonce: 78,
             tx_index: 3,
+            referrer: None,
+            request_referrer: None,
+            offer_referrer: None,
+            request_referrer_fee: 0,
+            offer_referrer_fee: 0,
         })
     }
 

@@ -77,6 +77,8 @@ pub async fn run_indexer(config: AppConfig) -> Result<(), Box<dyn std::error::Er
         pool.clone(),
         config.indexer_poll_interval_ms,
         config.indexer_start_height,
+        config.ride_request_referrer_fee_percent,
+        config.ride_offer_referrer_fee_percent,
     );
 
     let developer_mode = config.developer_mode;

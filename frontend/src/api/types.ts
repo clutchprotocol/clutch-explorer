@@ -36,11 +36,16 @@ export type TransactionListItem = {
   function_call_type: string;
   is_ride_related: boolean;
   timestamp: string;
+  referrer?: string | null;
+  request_referrer_fee?: number;
+  offer_referrer_fee?: number;
 };
 
 export type TransactionDetail = TransactionListItem & {
   nonce: number;
   tx_index: number;
+  request_referrer?: string | null;
+  offer_referrer?: string | null;
 };
 
 export type Account = {

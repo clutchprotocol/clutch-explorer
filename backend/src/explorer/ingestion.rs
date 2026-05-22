@@ -43,6 +43,12 @@ pub struct RawTransaction {
     pub nonce: u64,
     pub tx_index: u32,
     pub timestamp: DateTime<Utc>,
+    pub referrer: Option<String>,
+    pub request_referrer: Option<String>,
+    pub offer_referrer: Option<String>,
+    pub request_referrer_fee: u64,
+    pub offer_referrer_fee: u64,
+    pub payload_json: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -296,6 +302,12 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     .to_string();
 
                 let amount = Self::parse_amount(&arguments);
+                let payload_json = if arguments.is_null() {
+                    None
+                } else {
+                    Some(arguments.to_string())
+                };
+                let referrer = crate::explorer::referrer::parse_referrer(&arguments);
 
                 out.push(RawTransaction {
                     hash,
@@ -310,6 +322,12 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     nonce,
                     tx_index: idx as u32,
                     timestamp: block_ts,
+                    referrer,
+                    request_referrer: None,
+                    offer_referrer: None,
+                    request_referrer_fee: 0,
+                    offer_referrer_fee: 0,
+                    payload_json,
                 });
             }
 
