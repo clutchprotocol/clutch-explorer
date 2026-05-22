@@ -1,6 +1,6 @@
 use clap::Parser;
 use clutch_explorer_backend::explorer::configuration::AppConfig;
-use clutch_explorer_backend::explorer::run::run_indexer;
+use clutch_explorer_backend::run_indexer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
