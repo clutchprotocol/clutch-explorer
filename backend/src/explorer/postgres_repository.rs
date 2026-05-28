@@ -272,21 +272,33 @@ impl ExplorerRepository for PostgresRepository {
                 return Err(ExplorerError::NotFound(format!("account {}", address)));
             }
 
+            let canonical =
+                normalize_hex_address(&address).unwrap_or_else(|| address.clone());
+            let legacy = canonical
+                .strip_prefix("0x")
+                .or_else(|| canonical.strip_prefix("0X"))
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| canonical.clone());
+
             let row = sqlx::query_as::<_, AccountRow>(
                 r#"
                 SELECT address, balance, nonce, tx_count, is_contract
                 FROM accounts
                 WHERE LOWER(address) = LOWER($1)
+                   OR (LOWER($2) <> LOWER($1) AND LOWER(address) = LOWER($2))
+                ORDER BY CASE WHEN LOWER(address) = LOWER($1) THEN 0 ELSE 1 END
+                LIMIT 1
                 "#,
             )
-            .bind(&address)
+            .bind(&canonical)
+            .bind(&legacy)
             .fetch_optional(&self.pool)
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
             if let Some(row) = row {
                 return Ok(AccountDto {
-                    address: row.address,
+                    address: normalize_hex_address(&row.address).unwrap_or(row.address),
                     balance: row.balance as u64,
                     nonce: row.nonce as u64,
                     tx_count: row.tx_count as u64,
@@ -302,14 +314,14 @@ impl ExplorerRepository for PostgresRepository {
                 WHERE LOWER(from_address) = LOWER($1) OR LOWER(to_address) = LOWER($1)
                 "#,
             )
-            .bind(&address)
+            .bind(&canonical)
             .fetch_one(&self.pool)
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
             if tx_count > 0 {
                 return Ok(AccountDto {
-                    address,
+                    address: canonical.clone(),
                     balance: 0,
                     nonce: 0,
                     tx_count: tx_count as u64,
@@ -326,7 +338,7 @@ impl ExplorerRepository for PostgresRepository {
                 LIMIT 1
                 "#,
             )
-            .bind(&address)
+            .bind(&canonical)
             .fetch_one(&self.pool)
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
@@ -339,14 +351,16 @@ impl ExplorerRepository for PostgresRepository {
                   AND LOWER($1) <> 'unknown'
                 "#,
             )
-            .bind(&address)
+            .bind(&canonical)
             .fetch_one(&self.pool)
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
             if validator_address.is_some() || produced_blocks > 0 {
                 return Ok(AccountDto {
-                    address: validator_address.unwrap_or(address),
+                    address: validator_address
+                        .and_then(|a| normalize_hex_address(&a))
+                        .unwrap_or(canonical),
                     balance: 0,
                     nonce: 0,
                     tx_count: tx_count as u64,

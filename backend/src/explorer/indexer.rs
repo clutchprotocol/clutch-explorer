@@ -1,6 +1,6 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::ingestion::NodeIngestionSource;
-use crate::explorer::referrer::enrich_transactions;
+use crate::explorer::referrer::{enrich_transactions, normalize_hex_address};
 use sqlx::PgPool;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -141,9 +141,11 @@ impl IndexerService {
             return Ok(());
         }
 
+        let canonical = normalize_hex_address(address).unwrap_or_else(|| address.to_string());
+
         let snapshot = self
             .source
-            .fetch_account_snapshot(address.to_string())
+            .fetch_account_snapshot(canonical.clone())
             .await?;
 
         let tx_count = sqlx::query_scalar::<_, i64>(
@@ -153,7 +155,7 @@ impl IndexerService {
             WHERE LOWER(from_address) = LOWER($1) OR LOWER(to_address) = LOWER($1)
             "#,
         )
-        .bind(address)
+        .bind(&canonical)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
@@ -169,7 +171,7 @@ impl IndexerService {
                 updated_at = NOW()
             "#,
         )
-        .bind(snapshot.address)
+        .bind(&canonical)
         .bind(snapshot.balance as i64)
         .bind(snapshot.nonce as i64)
         .bind(tx_count)

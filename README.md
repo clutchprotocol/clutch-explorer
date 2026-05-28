@@ -51,6 +51,17 @@ Services:
 - `GET /api/v1/search?q=...`
 - `GET /api/v1/stats`
 
+## Referrer rewards (RidePay)
+
+Referrer balances are credited on-chain when a **RidePay** transaction is applied. After upgrading clutch-node or explorer:
+
+1. Rebuild and restart **all validator nodes** (referrer fee % and account canonicalization live in node config).
+2. Restart the **explorer** backend and indexer so account snapshots use canonical `0x` addresses.
+3. Run a **new** ride (RideRequest → Offer → Acceptance → RidePay). Past RidePay txs are not re-applied.
+4. Confirm balance at `/address/0x…` (e.g. `http://localhost:5174/address/0x0912514c7cc3eec2b2dab4e1d150c4b5eaee5a6f`).
+
+Node config must set `ride_request_referrer_fee_percent` and `ride_offer_referrer_fee_percent` (default **2** in deploy configs). Small fares use **ceiling** rounding (e.g. 2% of 3 CLT → 1 CLT per referrer side).
+
 ## Logging
 
 Backend supports Seq with:

@@ -16,6 +16,14 @@ pub fn normalize_hex_address(value: &str) -> Option<String> {
     Some(format!("0x{}", body.to_ascii_lowercase()))
 }
 
+/// Match clutch-node RidePay referrer fee rounding (ceiling division).
+pub fn referrer_fee_ceiling(percent: u8, fare: u64) -> u64 {
+    if percent == 0 || fare == 0 {
+        return 0;
+    }
+    (percent as u64 * fare + 99) / 100
+}
+
 pub fn parse_referrer(arguments: &Value) -> Option<String> {
     arguments
         .get("referrer")
@@ -124,10 +132,10 @@ pub async fn enrich_transactions(
                 let mut request_fee = 0u64;
                 let mut offer_fee = 0u64;
                 if request_referrer.is_some() && request_fee_percent > 0 {
-                    request_fee = (request_fee_percent as u64 * fare) / 100;
+                    request_fee = referrer_fee_ceiling(request_fee_percent, fare);
                 }
                 if offer_referrer.is_some() && offer_fee_percent > 0 {
-                    offer_fee = (offer_fee_percent as u64 * fare) / 100;
+                    offer_fee = referrer_fee_ceiling(offer_fee_percent, fare);
                 }
 
                 tx.request_referrer = request_referrer;
@@ -169,5 +177,12 @@ mod tests {
             parse_referrer(&args).as_deref(),
             Some("0x0912514c7cc3eec2b2dab4e1d150c4b5eaee5a6f")
         );
+    }
+
+    #[test]
+    fn referrer_fee_ceiling_small_fare() {
+        assert_eq!(referrer_fee_ceiling(2, 3), 1);
+        assert_eq!(referrer_fee_ceiling(2, 50), 1);
+        assert_eq!(referrer_fee_ceiling(2, 100), 2);
     }
 }
