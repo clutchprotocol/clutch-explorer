@@ -36,7 +36,7 @@ fn default_developer_mode() -> bool {
 }
 
 fn default_referrer_fee_percent() -> u8 {
-    1
+    2
 }
 
 #[derive(Debug, Deserialize, Clone)]

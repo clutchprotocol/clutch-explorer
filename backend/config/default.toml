@@ -14,5 +14,5 @@ seq_api_key = ""
 allowed_origins = "*"
 
 # Must match clutch-node config for accurate RidePay referrer fee display.
-ride_request_referrer_fee_percent = 1
-ride_offer_referrer_fee_percent = 1
+ride_request_referrer_fee_percent = 2
+ride_offer_referrer_fee_percent = 2
