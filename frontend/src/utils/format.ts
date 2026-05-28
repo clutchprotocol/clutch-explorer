@@ -17,3 +17,13 @@ export function formatRelativeTime(value: string) {
   if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
   return `${Math.floor(diffSeconds / 86400)}d ago`;
 }
+
+/** Normalize hex addresses to lowercase `0x…` (RLP/on-chain often omits prefix). */
+export function formatHexAddress(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const body = trimmed.startsWith("0x") || trimmed.startsWith("0X") ? trimmed.slice(2) : trimmed;
+  if (!body) return null;
+  return `0x${body.toLowerCase()}`;
+}

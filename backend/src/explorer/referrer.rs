@@ -3,15 +3,25 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
+/// Ensure Clutch account addresses use a `0x` prefix for display and lookups.
+pub fn normalize_hex_address(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let body = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")).unwrap_or(trimmed);
+    if body.is_empty() {
+        return None;
+    }
+    Some(format!("0x{}", body.to_ascii_lowercase()))
+}
+
 pub fn parse_referrer(arguments: &Value) -> Option<String> {
     arguments
         .get("referrer")
         .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
+        .and_then(|s| normalize_hex_address(s))
 }
-
 fn arg_str(arguments: &Value, key: &str) -> Option<String> {
     arguments
         .get(key)
@@ -128,5 +138,36 @@ pub async fn enrich_transactions(
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn normalize_hex_address_adds_prefix() {
+        assert_eq!(
+            normalize_hex_address("0912514c7cc3eec2b2dab4e1d150c4b5eaee5a6f").as_deref(),
+            Some("0x0912514c7cc3eec2b2dab4e1d150c4b5eaee5a6f")
+        );
+    }
+
+    #[test]
+    fn normalize_hex_address_lowercases() {
+        assert_eq!(
+            normalize_hex_address("0XABCDEF").as_deref(),
+            Some("0xabcdef")
+        );
+    }
+
+    #[test]
+    fn parse_referrer_normalizes_payload() {
+        let args = json!({ "referrer": "0912514c7cc3eec2b2dab4e1d150c4b5eaee5a6f" });
+        assert_eq!(
+            parse_referrer(&args).as_deref(),
+            Some("0x0912514c7cc3eec2b2dab4e1d150c4b5eaee5a6f")
+        );
     }
 }

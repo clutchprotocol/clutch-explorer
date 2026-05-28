@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { explorerApi } from "../api/client";
 import type { TransactionDetail } from "../api/types";
 import { ErrorBanner, LoadingState, Panel } from "../components/ui";
-import { formatRelativeTime, shortHash } from "../utils/format";
+import { formatHexAddress, formatRelativeTime, shortHash } from "../utils/format";
 
 export function TransactionDetailPage() {
   const { hash = "" } = useParams();
@@ -70,6 +70,10 @@ export function TransactionDetailPage() {
       ? `Confirmed (${confirmations} confirmations)`
       : item.status;
 
+  const referrer = formatHexAddress(item.referrer);
+  const requestReferrer = formatHexAddress(item.request_referrer);
+  const offerReferrer = formatHexAddress(item.offer_referrer);
+
   return (
     <Panel title={`Transaction ${shortHash(item.hash)}`}>
       <ErrorBanner message={error} />
@@ -105,11 +109,11 @@ export function TransactionDetailPage() {
         <dd>{item.amount}</dd>
         <dt>Fee</dt>
         <dd>{item.fee}</dd>
-        {item.referrer && (
+        {referrer && (
           <>
             <dt>Referrer</dt>
             <dd>
-              <Link to={`/address/${item.referrer}`}>{item.referrer}</Link>
+              <Link to={`/address/${referrer}`}>{referrer}</Link>
             </dd>
           </>
         )}
@@ -119,20 +123,20 @@ export function TransactionDetailPage() {
             <dt>Referrer fees (CLT)</dt>
             <dd>
               {(item.request_referrer_fee ?? 0) + (item.offer_referrer_fee ?? 0)}
-              {item.request_referrer && item.request_referrer_fee ? (
+              {requestReferrer && item.request_referrer_fee ? (
                 <div className="referrer-fee-line">
                   Request app:{" "}
-                  <Link to={`/address/${item.request_referrer}`}>
-                    {item.request_referrer}
+                  <Link to={`/address/${requestReferrer}`}>
+                    {requestReferrer}
                   </Link>{" "}
                   — {item.request_referrer_fee} CLT
                 </div>
               ) : null}
-              {item.offer_referrer && item.offer_referrer_fee ? (
+              {offerReferrer && item.offer_referrer_fee ? (
                 <div className="referrer-fee-line">
                   Offer app:{" "}
-                  <Link to={`/address/${item.offer_referrer}`}>
-                    {item.offer_referrer}
+                  <Link to={`/address/${offerReferrer}`}>
+                    {offerReferrer}
                   </Link>{" "}
                   — {item.offer_referrer_fee} CLT
                 </div>

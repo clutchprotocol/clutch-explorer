@@ -3,6 +3,7 @@ use crate::explorer::models::{
     AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionDetailDto,
     TransactionListItemDto, ValidatorDto,
 };
+use crate::explorer::referrer::normalize_hex_address;
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
 use chrono::{DateTime, Utc};
 use sqlx::{FromRow, PgPool};
@@ -15,6 +16,10 @@ impl PostgresRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+fn opt_normalized_address(value: Option<String>) -> Option<String> {
+    value.and_then(|v| normalize_hex_address(&v))
 }
 
 #[derive(FromRow)]
@@ -215,7 +220,7 @@ impl ExplorerRepository for PostgresRepository {
                     function_call_type: r.function_call_type,
                     is_ride_related: r.is_ride_related,
                     timestamp: r.timestamp,
-                    referrer: r.referrer,
+                    referrer: opt_normalized_address(r.referrer),
                     request_referrer_fee: r.request_referrer_fee as u64,
                     offer_referrer_fee: r.offer_referrer_fee as u64,
                 })
@@ -252,9 +257,9 @@ impl ExplorerRepository for PostgresRepository {
                 timestamp: row.timestamp,
                 nonce: row.nonce as u64,
                 tx_index: row.tx_index as u32,
-                referrer: row.referrer,
-                request_referrer: row.request_referrer,
-                offer_referrer: row.offer_referrer,
+                referrer: opt_normalized_address(row.referrer),
+                request_referrer: opt_normalized_address(row.request_referrer),
+                offer_referrer: opt_normalized_address(row.offer_referrer),
                 request_referrer_fee: row.request_referrer_fee as u64,
                 offer_referrer_fee: row.offer_referrer_fee as u64,
             })
