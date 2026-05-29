@@ -9,6 +9,7 @@ pub mod models;
 pub mod node_client;
 pub mod node_repository;
 pub mod postgres_repository;
+pub mod activity;
 pub mod referrer;
 pub mod repository;
 pub mod run;

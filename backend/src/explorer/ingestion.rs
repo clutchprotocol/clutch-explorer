@@ -1,3 +1,4 @@
+use crate::explorer::activity::{parse_balance_effects_from_tx, parse_block_balance_effects, ParsedBalanceEffect};
 use crate::explorer::error::ExplorerError;
 use chrono::{DateTime, TimeZone, Utc};
 use futures_util::{SinkExt, StreamExt};
@@ -49,6 +50,13 @@ pub struct RawTransaction {
     pub request_referrer_fee: u64,
     pub offer_referrer_fee: u64,
     pub payload_json: Option<String>,
+    pub balance_effects: Vec<ParsedBalanceEffect>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockIndexData {
+    pub transactions: Vec<RawTransaction>,
+    pub block_balance_effects: Vec<ParsedBalanceEffect>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +69,7 @@ pub struct RawAccountSnapshot {
 pub trait NodeIngestionSource: Send + Sync {
     fn fetch_head(&self) -> IngestFuture<'_, RawHead>;
     fn fetch_block_by_height(&self, height: u64) -> IngestFuture<'_, RawBlock>;
-    fn fetch_transactions_by_block(&self, height: u64) -> IngestFuture<'_, Vec<RawTransaction>>;
+    fn fetch_transactions_by_block(&self, height: u64) -> IngestFuture<'_, BlockIndexData>;
     fn fetch_account_snapshot(&self, address: String) -> IngestFuture<'_, RawAccountSnapshot>;
 }
 
@@ -248,7 +256,7 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
         })
     }
 
-    fn fetch_transactions_by_block(&self, height: u64) -> IngestFuture<'_, Vec<RawTransaction>> {
+    fn fetch_transactions_by_block(&self, height: u64) -> IngestFuture<'_, BlockIndexData> {
         Box::pin(async move {
             let block = self
                 .rpc_call("get_block_by_index", serde_json::json!({ "index": height }))
@@ -259,6 +267,9 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                 .and_then(|v| v.as_u64())
                 .map(|v| Self::parse_timestamp(v as i64))
                 .unwrap_or_else(Utc::now);
+
+            let block_balance_effects =
+                parse_block_balance_effects(&block, height, block_ts);
 
             let txs = block
                 .get("transactions")
@@ -308,6 +319,8 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     Some(arguments.to_string())
                 };
                 let referrer = crate::explorer::referrer::parse_referrer(&arguments);
+                let balance_effects =
+                    parse_balance_effects_from_tx(&tx, height, idx as u32, block_ts);
 
                 out.push(RawTransaction {
                     hash,
@@ -328,10 +341,14 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     request_referrer_fee: 0,
                     offer_referrer_fee: 0,
                     payload_json,
+                    balance_effects,
                 });
             }
 
-            Ok(out)
+            Ok(BlockIndexData {
+                transactions: out,
+                block_balance_effects,
+            })
         })
     }
 

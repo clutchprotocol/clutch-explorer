@@ -1,5 +1,5 @@
 use crate::explorer::models::{
-    AccountDto, BlockDetailDto, BlockListItemDto, StatsDto, TransactionDetailDto,
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, StatsDto, TransactionDetailDto,
     TransactionListItemDto, ValidatorDto,
 };
 use chrono::Utc;
@@ -404,6 +404,10 @@ impl NodeClient {
                 balance: payload.get("balance").and_then(|v| v.as_u64()).unwrap_or(0),
                 nonce: payload.get("nonce").and_then(|v| v.as_u64()).unwrap_or(0),
                 tx_count: payload.get("tx_count").and_then(|v| v.as_u64()).unwrap_or(0),
+                activity_count: payload
+                    .get("activity_count")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
                 is_contract: payload
                     .get("is_contract")
                     .and_then(|v| v.as_bool())
@@ -421,8 +425,18 @@ impl NodeClient {
             balance: 145_000,
             nonce: 42,
             tx_count: 128,
+            activity_count: 0,
             is_contract: address.ends_with("c"),
         })
+    }
+
+    pub async fn account_activity(
+        &self,
+        _address: &str,
+        _limit: usize,
+        _offset: usize,
+    ) -> Result<Vec<AccountActivityDto>, NodeClientError> {
+        Ok(Vec::new())
     }
 
     pub async fn validators(

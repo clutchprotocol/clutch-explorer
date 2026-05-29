@@ -1,8 +1,8 @@
 use crate::explorer::configuration::AppConfig;
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
-    AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionDetailDto,
-    TransactionListItemDto, ValidatorDto,
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
+    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::node_client::NodeClient;
 use crate::explorer::node_repository::NodeRepository;
@@ -81,6 +81,17 @@ impl ExplorerService {
 
     pub async fn get_account(&self, address: &str) -> Result<AccountDto, ExplorerError> {
         self.repository.get_account(address.to_string()).await
+    }
+
+    pub async fn get_account_activity(
+        &self,
+        address: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<AccountActivityDto>, ExplorerError> {
+        self.repository
+            .get_account_activity(address.to_string(), limit, offset)
+            .await
     }
 
     pub async fn get_validators(

@@ -176,6 +176,41 @@ pub async fn get_account(
     }
 }
 
+pub async fn get_account_activity(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+    Query(query): Query<ListQuery>,
+) -> impl IntoResponse {
+    if address.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorDto {
+                code: "invalid_request".to_string(),
+                message: "address must not be empty".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    let limit = query.limit.unwrap_or(20).min(100);
+    let offset = query.offset.unwrap_or(0);
+    match state.service.get_account_activity(&address, limit, offset).await {
+        Ok(items) => (
+            StatusCode::OK,
+            Json(ListResponseDto {
+                paging: PagingDto {
+                    limit,
+                    offset,
+                    total: offset + items.len(),
+                    has_more: items.len() == limit,
+                },
+                items,
+            }),
+        )
+            .into_response(),
+        Err(err) => map_error(err).into_response(),
+    }
+}
+
 pub async fn list_validators(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,

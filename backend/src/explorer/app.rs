@@ -29,6 +29,10 @@ pub fn build_router(
         .route("/api/v1/transactions", get(handlers::list_transactions))
         .route("/api/v1/transactions/:hash", get(handlers::get_transaction))
         .route("/api/v1/accounts/:address", get(handlers::get_account))
+        .route(
+            "/api/v1/accounts/:address/activity",
+            get(handlers::get_account_activity),
+        )
         .route("/api/v1/validators", get(handlers::list_validators))
         .route("/api/v1/search", get(handlers::search))
         .route("/api/v1/stats", get(handlers::get_stats))

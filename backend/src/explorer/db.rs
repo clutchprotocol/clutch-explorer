@@ -43,6 +43,44 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ExplorerError> {
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
+    let migration_sql_3 = include_str!("../../migrations/0003_account_activity.sql");
+    let mut tx3 = pool
+        .begin()
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+    for statement in migration_sql_3.split(';') {
+        let statement = statement.trim();
+        if statement.is_empty() {
+            continue;
+        }
+        sqlx::query(statement)
+            .execute(&mut *tx3)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+    }
+    tx3.commit()
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+    let migration_sql_4 = include_str!("../../migrations/0004_activity_count.sql");
+    let mut tx4 = pool
+        .begin()
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+    for statement in migration_sql_4.split(';') {
+        let statement = statement.trim();
+        if statement.is_empty() {
+            continue;
+        }
+        sqlx::query(statement)
+            .execute(&mut *tx4)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+    }
+    tx4.commit()
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
     Ok(())
 }
 
@@ -53,7 +91,7 @@ pub async fn cleanup_database(pool: &PgPool) -> Result<(), ExplorerError> {
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
     // Truncate all tables in reverse order of dependencies if any
-    sqlx::query("TRUNCATE TABLE transactions, blocks, accounts, validators, indexer_cursor CASCADE")
+    sqlx::query("TRUNCATE TABLE account_activity, transactions, blocks, accounts, validators, indexer_cursor CASCADE")
         .execute(&mut *tx)
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;

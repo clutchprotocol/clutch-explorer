@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
-    AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionDetailDto,
-    TransactionListItemDto, ValidatorDto,
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
+    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::node_client::{NodeClient, NodeClientError};
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
@@ -66,6 +66,20 @@ impl ExplorerRepository for NodeRepository {
         Box::pin(async move {
             self.node_client
                 .account_by_address(&address)
+                .await
+                .map_err(map_node_error)
+        })
+    }
+
+    fn get_account_activity(
+        &self,
+        address: String,
+        limit: usize,
+        offset: usize,
+    ) -> RepoFuture<'_, Vec<AccountActivityDto>> {
+        Box::pin(async move {
+            self.node_client
+                .account_activity(&address, limit, offset)
                 .await
                 .map_err(map_node_error)
         })

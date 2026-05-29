@@ -53,7 +53,23 @@ export type Account = {
   balance: number;
   nonce: number;
   tx_count: number;
+  activity_count: number;
   is_contract: boolean;
+};
+
+export type AccountActivity = {
+  address: string;
+  kind: string;
+  label: string;
+  delta: number;
+  direction: "in" | "out";
+  amount: number;
+  tx_hash?: string | null;
+  block_height: number;
+  tx_index?: number | null;
+  function_call_type?: string | null;
+  counterparty?: string | null;
+  timestamp: string;
 };
 
 export type Validator = {

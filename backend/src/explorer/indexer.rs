@@ -1,3 +1,4 @@
+use crate::explorer::activity::insert_account_activity;
 use crate::explorer::error::ExplorerError;
 use crate::explorer::ingestion::NodeIngestionSource;
 use crate::explorer::referrer::{enrich_transactions, normalize_hex_address};
@@ -160,14 +161,27 @@ impl IndexerService {
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
+        let activity_count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM account_activity
+            WHERE LOWER(address) = LOWER($1)
+            "#,
+        )
+        .bind(&canonical)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
         sqlx::query(
             r#"
-            INSERT INTO accounts (address, balance, nonce, tx_count, is_contract, updated_at)
-            VALUES ($1, $2, $3, $4, FALSE, NOW())
+            INSERT INTO accounts (address, balance, nonce, tx_count, activity_count, is_contract, updated_at)
+            VALUES ($1, $2, $3, $4, $5, FALSE, NOW())
             ON CONFLICT (address) DO UPDATE SET
                 balance = EXCLUDED.balance,
                 nonce = EXCLUDED.nonce,
                 tx_count = EXCLUDED.tx_count,
+                activity_count = EXCLUDED.activity_count,
                 updated_at = NOW()
             "#,
         )
@@ -175,6 +189,7 @@ impl IndexerService {
         .bind(snapshot.balance as i64)
         .bind(snapshot.nonce as i64)
         .bind(tx_count)
+        .bind(activity_count)
         .execute(&self.pool)
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
@@ -218,7 +233,8 @@ impl IndexerService {
 
         self.sync_validator_for_producer(&producer).await?;
 
-        let mut txs = self.source.fetch_transactions_by_block(height).await?;
+        let block_data = self.source.fetch_transactions_by_block(height).await?;
+        let mut txs = block_data.transactions;
         enrich_transactions(
             &self.pool,
             &mut txs,
@@ -226,6 +242,10 @@ impl IndexerService {
             self.ride_offer_referrer_fee_percent,
         )
         .await;
+
+        for effect in &block_data.block_balance_effects {
+            insert_account_activity(&self.pool, effect).await?;
+        }
 
         let mut addresses_to_sync: HashSet<String> = HashSet::new();
         if Self::is_real_validator_address(&producer) {
@@ -288,6 +308,14 @@ impl IndexerService {
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
+            for effect in &tx.balance_effects {
+                insert_account_activity(&self.pool, effect).await?;
+                addresses_to_sync.insert(effect.address.clone());
+                if let Some(ref cp) = effect.counterparty {
+                    addresses_to_sync.insert(cp.clone());
+                }
+            }
+
             addresses_to_sync.insert(from_address);
             addresses_to_sync.insert(to_address);
             if let Some(ref r) = tx.referrer {
@@ -298,6 +326,13 @@ impl IndexerService {
             }
             if let Some(ref r) = tx.offer_referrer {
                 addresses_to_sync.insert(r.clone());
+            }
+        }
+
+        for effect in &block_data.block_balance_effects {
+            addresses_to_sync.insert(effect.address.clone());
+            if let Some(ref cp) = effect.counterparty {
+                addresses_to_sync.insert(cp.clone());
             }
         }
 

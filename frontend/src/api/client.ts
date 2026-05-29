@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountActivity,
   BlockDetail,
   BlockListItem,
   ListResponse,
@@ -51,6 +52,10 @@ export const explorerApi = {
     api<TransactionDetail>(`/v1/transactions/${encodeURIComponent(hash)}`),
   getAccountByAddress: (address: string) =>
     api<Account>(`/v1/accounts/${encodeURIComponent(address)}`),
+  getAccountActivity: (address: string, limit = 20, offset = 0) =>
+    api<ListResponse<AccountActivity>>(
+      `/v1/accounts/${encodeURIComponent(address)}/activity?limit=${limit}&offset=${offset}`,
+    ),
   getValidators: (limit = 20, offset = 0) =>
     api<ListResponse<Validator>>(`/v1/validators?limit=${limit}&offset=${offset}`),
   search: (query: string) =>

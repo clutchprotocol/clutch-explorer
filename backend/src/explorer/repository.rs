@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
-    AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionDetailDto,
-    TransactionListItemDto, ValidatorDto,
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
+    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
 };
 use std::future::Future;
 use std::pin::Pin;
@@ -20,6 +20,12 @@ pub trait ExplorerRepository: Send + Sync {
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>>;
     fn get_transaction(&self, hash: String) -> RepoFuture<'_, TransactionDetailDto>;
     fn get_account(&self, address: String) -> RepoFuture<'_, AccountDto>;
+    fn get_account_activity(
+        &self,
+        address: String,
+        limit: usize,
+        offset: usize,
+    ) -> RepoFuture<'_, Vec<AccountActivityDto>>;
     fn get_validators(&self, limit: usize, offset: usize) -> RepoFuture<'_, Vec<ValidatorDto>>;
     fn get_stats(&self) -> RepoFuture<'_, StatsDto>;
     fn search(&self, query: String) -> RepoFuture<'_, Vec<SearchResultDto>>;

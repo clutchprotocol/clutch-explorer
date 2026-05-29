@@ -69,7 +69,24 @@ pub struct AccountDto {
     pub balance: u64,
     pub nonce: u64,
     pub tx_count: u64,
+    pub activity_count: u64,
     pub is_contract: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AccountActivityDto {
+    pub address: String,
+    pub kind: String,
+    pub label: String,
+    pub delta: i64,
+    pub direction: String,
+    pub amount: u64,
+    pub tx_hash: Option<String>,
+    pub block_height: u64,
+    pub tx_index: Option<u32>,
+    pub function_call_type: Option<String>,
+    pub counterparty: Option<String>,
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

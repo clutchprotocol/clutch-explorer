@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
-    AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionDetailDto,
-    TransactionListItemDto, ValidatorDto,
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
+    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::referrer::normalize_hex_address;
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
@@ -62,7 +62,24 @@ struct AccountRow {
     balance: i64,
     nonce: i64,
     tx_count: i64,
+    activity_count: i64,
     is_contract: bool,
+}
+
+#[derive(FromRow)]
+struct ActivityRow {
+    address: String,
+    kind: String,
+    label: String,
+    delta: i64,
+    direction: String,
+    amount: i64,
+    tx_hash: Option<String>,
+    block_height: i64,
+    tx_index: Option<i32>,
+    function_call_type: Option<String>,
+    counterparty: Option<String>,
+    timestamp: DateTime<Utc>,
 }
 
 #[derive(FromRow)]
@@ -282,7 +299,7 @@ impl ExplorerRepository for PostgresRepository {
 
             let row = sqlx::query_as::<_, AccountRow>(
                 r#"
-                SELECT address, balance, nonce, tx_count, is_contract
+                SELECT address, balance, nonce, tx_count, activity_count, is_contract
                 FROM accounts
                 WHERE LOWER(address) = LOWER($1)
                    OR (LOWER($2) <> LOWER($1) AND LOWER(address) = LOWER($2))
@@ -302,6 +319,7 @@ impl ExplorerRepository for PostgresRepository {
                     balance: row.balance as u64,
                     nonce: row.nonce as u64,
                     tx_count: row.tx_count as u64,
+                    activity_count: row.activity_count as u64,
                     is_contract: row.is_contract,
                 });
             }
@@ -319,12 +337,25 @@ impl ExplorerRepository for PostgresRepository {
             .await
             .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
-            if tx_count > 0 {
+            let activity_count = sqlx::query_scalar::<_, i64>(
+                r#"
+                SELECT COUNT(*)
+                FROM account_activity
+                WHERE LOWER(address) = LOWER($1)
+                "#,
+            )
+            .bind(&canonical)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+            if tx_count > 0 || activity_count > 0 {
                 return Ok(AccountDto {
                     address: canonical.clone(),
                     balance: 0,
                     nonce: 0,
                     tx_count: tx_count as u64,
+                    activity_count: activity_count as u64,
                     is_contract: false,
                 });
             }
@@ -364,11 +395,63 @@ impl ExplorerRepository for PostgresRepository {
                     balance: 0,
                     nonce: 0,
                     tx_count: tx_count as u64,
+                    activity_count: activity_count as u64,
                     is_contract: false,
                 });
             }
 
             Err(ExplorerError::NotFound(format!("account {}", address)))
+        })
+    }
+
+    fn get_account_activity(
+        &self,
+        address: String,
+        limit: usize,
+        offset: usize,
+    ) -> RepoFuture<'_, Vec<AccountActivityDto>> {
+        Box::pin(async move {
+            if address.trim().is_empty() || address.eq_ignore_ascii_case("unknown") {
+                return Err(ExplorerError::NotFound(format!("account {}", address)));
+            }
+
+            let canonical =
+                normalize_hex_address(&address).unwrap_or_else(|| address.clone());
+
+            let rows = sqlx::query_as::<_, ActivityRow>(
+                r#"
+                SELECT address, kind, label, delta, direction, amount, tx_hash, block_height,
+                       tx_index, function_call_type, counterparty, timestamp
+                FROM account_activity
+                WHERE LOWER(address) = LOWER($1)
+                ORDER BY block_height DESC, COALESCE(tx_index, -1) DESC, id DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(&canonical)
+            .bind(limit as i64)
+            .bind(offset as i64)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+            Ok(rows
+                .into_iter()
+                .map(|r| AccountActivityDto {
+                    address: normalize_hex_address(&r.address).unwrap_or(r.address),
+                    kind: r.kind,
+                    label: r.label,
+                    delta: r.delta,
+                    direction: r.direction,
+                    amount: r.amount as u64,
+                    tx_hash: r.tx_hash,
+                    block_height: r.block_height as u64,
+                    tx_index: r.tx_index.map(|v| v as u32),
+                    function_call_type: r.function_call_type,
+                    counterparty: opt_normalized_address(r.counterparty),
+                    timestamp: r.timestamp,
+                })
+                .collect())
         })
     }
 
