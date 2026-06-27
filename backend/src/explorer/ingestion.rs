@@ -152,8 +152,6 @@ impl NodeHttpIngestionSource {
                 | "RidePay"
                 | "RideCancel"
                 | "RideRequestCancel"
-                | "ConfirmArrival"
-                | "ComplainArrival"
         )
     }
 }
