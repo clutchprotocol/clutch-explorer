@@ -6,7 +6,9 @@ developer_mode = false
 data_source = "postgres"
 database_url = "postgres://postgres:postgres@explorer-postgres:5432/clutch_explorer"
 node_metrics_url = "http://node1:3001/metrics"
-node_ws_url = "http://node1:8081"
+# Must be a ws:// URL (passed straight to tokio-tungstenite).
+# Docker/deploy overrides this via APP_NODE_WS_URL=ws://node1:8081/ws.
+node_ws_url = "ws://localhost:8081/ws"
 indexer_poll_interval_ms = 4000
 indexer_start_height = 0
 seq_url = "http://127.0.0.1:5341"
