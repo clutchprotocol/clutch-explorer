@@ -37,6 +37,7 @@ All logic lives in `src/explorer/`:
 2. For each height behind the cursor: `get_block_by_index` over **WebSocket JSON-RPC** (`node_ws_url`), plus `get_account_balance` / `get_next_nonce` per touched address.
 3. Upsert `blocks` → `validators` (producer counts) → `transactions` (with referrer enrichment) → `account_activity` (balance effects) → `accounts` snapshots. Everything is `ON CONFLICT ... DO UPDATE`, so re-indexing a height is safe.
 4. Cursor persisted in `indexer_cursor` (single row, id=1). On error the height is retried next poll; loop sleeps `indexer_poll_interval_ms` (default 4000).
+5. **Reorg detection** (`IndexerService::reconcile_head` / `index_height`'s parent-hash check): every poll compares the node's reported head against what's indexed; a node behind the cursor (e.g. restarted with `developer_mode=true` and wiped) or a tip whose hash no longer matches triggers `find_fork_point` (walks backward comparing stored vs. live hashes) then `unwind_to` (deletes `blocks`/`account_activity` above the fork point — `transactions` cascades via FK — and rewinds the cursor). Forward indexing then naturally re-upserts correct data.
 
 ### REST endpoints (all GET; see `app.rs`)
 

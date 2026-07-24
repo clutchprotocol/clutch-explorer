@@ -1,12 +1,18 @@
 use crate::explorer::activity::insert_account_activity;
 use crate::explorer::error::ExplorerError;
-use crate::explorer::ingestion::NodeIngestionSource;
+use crate::explorer::ingestion::{NodeIngestionSource, RawHead};
 use crate::explorer::referrer::{enrich_transactions, normalize_hex_address};
 use sqlx::PgPool;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
+
+/// Ceiling on how far back to search for the last common ancestor during a reorg. A node
+/// restart/wipe resolves in one or two steps; this only guards against a pathological case
+/// (e.g. the explorer pointed at a node with a wholly unrelated chain) searching forever.
+/// ponytail: fixed depth; make configurable if a real multi-block reorg ever needs more.
+const MAX_REORG_SEARCH_DEPTH: u64 = 1000;
 
 pub struct IndexerService {
     source: Arc<dyn NodeIngestionSource>,
@@ -15,6 +21,19 @@ pub struct IndexerService {
     start_height: u64,
     ride_request_referrer_fee_percent: u8,
     ride_offer_referrer_fee_percent: u8,
+}
+
+/// Pure decision: has the chain diverged from what's already indexed, given the node's
+/// reported head and our cursor? Extracted so the actual bug this guards against — silently
+/// ignoring `head.height < cursor` — has a direct unit test.
+fn head_has_diverged(head_height: u64, cursor: u64, head_hash_matches_cursor: bool) -> bool {
+    if head_height < cursor {
+        true
+    } else if head_height == cursor {
+        !head_hash_matches_cursor
+    } else {
+        false
+    }
 }
 
 impl IndexerService {
@@ -197,8 +216,123 @@ impl IndexerService {
         Ok(())
     }
 
+    /// Compares the node's current block hash at `height` against what's stored in Postgres.
+    /// A height we haven't indexed yet reads as "not diverged" — nothing to roll back, the
+    /// caller should just index forward normally.
+    async fn hash_matches_at(&self, height: u64, node_hash: &str) -> Result<bool, ExplorerError> {
+        let stored: Option<String> = sqlx::query_scalar("SELECT hash FROM blocks WHERE height = $1")
+            .bind(height as i64)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        Ok(match stored {
+            Some(h) => h == node_hash,
+            None => true,
+        })
+    }
+
+    /// Walks backward from `from_height` for the last height whose stored hash still matches
+    /// the node's current hash there. `Some(h)` = last common ancestor, everything indexed
+    /// above `h` is stale; `None` = even genesis diverged, wipe and reindex from scratch.
+    async fn find_fork_point(&self, from_height: u64) -> Result<Option<u64>, ExplorerError> {
+        let mut height = from_height;
+        let mut steps = 0u64;
+        loop {
+            let node_block = self.source.fetch_block_by_height(height).await?;
+            if self.hash_matches_at(height, &node_block.hash).await? {
+                return Ok(Some(height));
+            }
+            if height == 0 || steps >= MAX_REORG_SEARCH_DEPTH {
+                return Ok(None);
+            }
+            height -= 1;
+            steps += 1;
+        }
+    }
+
+    /// Deletes all indexed data above `fork_point` (or everything, including genesis, if
+    /// `None`) and rewinds the cursor so the main loop resumes from the correct point.
+    /// `transactions` cascade-deletes via its FK on `blocks`; `account_activity` has no FK
+    /// to `blocks` and is deleted explicitly. Validator producer counts are a running
+    /// `COUNT(*) FROM blocks`, so they're recomputed once the stale rows are gone.
+    async fn unwind_to(&self, fork_point: Option<u64>) -> Result<u64, ExplorerError> {
+        let (boundary, new_cursor): (i64, u64) = match fork_point {
+            Some(h) => (h as i64, h),
+            None => (-1, 0),
+        };
+
+        sqlx::query("DELETE FROM account_activity WHERE block_height > $1")
+            .bind(boundary)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        sqlx::query("DELETE FROM blocks WHERE height > $1")
+            .bind(boundary)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+
+        self.set_cursor(new_cursor).await?;
+        self.sync_validators_from_blocks().await?;
+
+        Ok(new_cursor)
+    }
+
+    /// Runs once per poll before the forward walk. Free in the steady state — reuses the
+    /// `head` already fetched this poll — and only reaches out to the node again once a
+    /// mismatch is actually suspected (node behind cursor, or the tip's hash disagrees).
+    async fn reconcile_head(&self, head: &RawHead, cursor: &mut u64) -> Result<(), ExplorerError> {
+        if *cursor == 0 {
+            return Ok(());
+        }
+
+        let head_hash_matches_cursor = if head.height == *cursor {
+            self.hash_matches_at(*cursor, &head.hash).await?
+        } else {
+            true // irrelevant when heights differ; head_has_diverged ignores it in that case
+        };
+
+        if !head_has_diverged(head.height, *cursor, head_hash_matches_cursor) {
+            return Ok(());
+        }
+
+        let search_from = head.height.min(*cursor);
+        error!(
+            "chain divergence detected: node head {} vs indexed cursor {}; searching for fork point from {}",
+            head.height, *cursor, search_from
+        );
+        let fork_point = self.find_fork_point(search_from).await?;
+        let old_cursor = *cursor;
+        let new_cursor = self.unwind_to(fork_point).await?;
+        error!(
+            "reorg handled: rewound cursor from {} to {}",
+            old_cursor, new_cursor
+        );
+        *cursor = new_cursor;
+        Ok(())
+    }
+
     async fn index_height(&self, height: u64) -> Result<(), ExplorerError> {
         let block = self.source.fetch_block_by_height(height).await?;
+
+        if height > 0 && !self.hash_matches_at(height - 1, &block.parent_hash).await? {
+            // The block we're about to index doesn't chain from what we have stored for the
+            // previous height — a reorg happened below our current polling frontier, where
+            // `reconcile_head`'s cursor-only check wouldn't see it. Unwind and let the next
+            // poll resume from the corrected cursor.
+            error!(
+                "parent hash mismatch indexing height {}: reorg below the current frontier",
+                height
+            );
+            let fork_point = self.find_fork_point(height - 1).await?;
+            self.unwind_to(fork_point).await?;
+            return Err(ExplorerError::Storage(format!(
+                "reorg detected while indexing height {}; cursor rewound, retrying next poll",
+                height
+            )));
+        }
+
         let producer = block.producer.clone();
         let reward_recipient = block.reward_recipient.clone();
         let block_reward = block.block_reward as i64;
@@ -359,6 +493,9 @@ impl IndexerService {
             }
             match self.source.fetch_head().await {
                 Ok(head) => {
+                    if let Err(err) = self.reconcile_head(&head, &mut cursor).await {
+                        error!("indexer reorg reconciliation failed: {}", err);
+                    }
                     if head.height > cursor {
                         for h in (cursor + 1)..=head.height {
                             match self.index_height(h).await {
@@ -384,5 +521,31 @@ impl IndexerService {
             }
             sleep(Duration::from_millis(self.poll_interval_ms)).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::head_has_diverged;
+
+    #[test]
+    fn node_behind_cursor_is_always_a_divergence() {
+        // The bug this guards against: the old code had no branch at all for this case and
+        // silently idled forever (e.g. after clutch-node restarts with developer_mode=true
+        // and wipes back to a lower height).
+        assert!(head_has_diverged(50, 100, true));
+        assert!(head_has_diverged(50, 100, false));
+    }
+
+    #[test]
+    fn same_height_diverged_only_if_hash_disagrees() {
+        assert!(!head_has_diverged(100, 100, true));
+        assert!(head_has_diverged(100, 100, false));
+    }
+
+    #[test]
+    fn normal_forward_progress_is_not_a_divergence() {
+        assert!(!head_has_diverged(150, 100, true));
+        assert!(!head_has_diverged(150, 100, false));
     }
 }
