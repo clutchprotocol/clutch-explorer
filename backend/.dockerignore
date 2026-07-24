@@ -1,0 +1,8 @@
+# Nothing here was ignored before, so every build shipped the whole Rust target/
+# dir to the daemon. Only Cargo.toml/Cargo.lock/src/migrations/config are COPY'd.
+/target
+.git
+*.md
+*.log
+.env
+.env.local
