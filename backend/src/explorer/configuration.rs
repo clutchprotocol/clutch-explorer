@@ -35,8 +35,8 @@ fn default_developer_mode() -> bool {
     false
 }
 
-fn default_referrer_fee_percent() -> u8 {
-    2
+fn default_referrer_fee_bps() -> u16 {
+    200
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -65,12 +65,12 @@ pub struct AppConfig {
     pub indexer_poll_interval_ms: u64,
     #[serde(default = "default_indexer_start_height")]
     pub indexer_start_height: u64,
-    /// Match clutch-node `ride_request_referrer_fee_percent` for RidePay display.
-    #[serde(default = "default_referrer_fee_percent")]
-    pub ride_request_referrer_fee_percent: u8,
-    /// Match clutch-node `ride_offer_referrer_fee_percent` for RidePay display.
-    #[serde(default = "default_referrer_fee_percent")]
-    pub ride_offer_referrer_fee_percent: u8,
+    /// Match clutch-node `ride_request_referrer_fee_bps` for RidePay display.
+    #[serde(default = "default_referrer_fee_bps")]
+    pub ride_request_referrer_fee_bps: u16,
+    /// Match clutch-node `ride_offer_referrer_fee_bps` for RidePay display.
+    #[serde(default = "default_referrer_fee_bps")]
+    pub ride_offer_referrer_fee_bps: u16,
 }
 
 impl AppConfig {

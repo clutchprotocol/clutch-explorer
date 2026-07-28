@@ -55,7 +55,7 @@ New endpoint = handler in `handlers.rs` + route in `app.rs` + method on `Explore
 - `config/{env}.toml` selected by `--env` (both binaries take it; default `default` → `config/default.toml`). Env vars with `APP_` prefix override (e.g. `APP_DATABASE_URL`); `.env` is loaded via dotenv.
 - `data_source`: `"postgres"` (normal) or `"node"` (DB-less passthrough).
 - `developer_mode` / `cleanup_on_start`: truncate all tables on shutdown / startup.
-- `ride_*_referrer_fee_percent` must match clutch-node config or RidePay fee display drifts.
+- `ride_*_referrer_fee_bps` must match clutch-node config or RidePay fee display drifts.
 
 ### DB schema / migrations
 

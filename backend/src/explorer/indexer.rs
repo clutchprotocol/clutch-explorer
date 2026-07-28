@@ -19,8 +19,8 @@ pub struct IndexerService {
     pool: PgPool,
     poll_interval_ms: u64,
     start_height: u64,
-    ride_request_referrer_fee_percent: u8,
-    ride_offer_referrer_fee_percent: u8,
+    ride_request_referrer_fee_bps: u16,
+    ride_offer_referrer_fee_bps: u16,
 }
 
 /// Pure decision: has the chain diverged from what's already indexed, given the node's
@@ -47,16 +47,16 @@ impl IndexerService {
         pool: PgPool,
         poll_interval_ms: u64,
         start_height: u64,
-        ride_request_referrer_fee_percent: u8,
-        ride_offer_referrer_fee_percent: u8,
+        ride_request_referrer_fee_bps: u16,
+        ride_offer_referrer_fee_bps: u16,
     ) -> Self {
         Self {
             source,
             pool,
             poll_interval_ms,
             start_height,
-            ride_request_referrer_fee_percent,
-            ride_offer_referrer_fee_percent,
+            ride_request_referrer_fee_bps,
+            ride_offer_referrer_fee_bps,
         }
     }
 
@@ -372,8 +372,8 @@ impl IndexerService {
         enrich_transactions(
             &self.pool,
             &mut txs,
-            self.ride_request_referrer_fee_percent,
-            self.ride_offer_referrer_fee_percent,
+            self.ride_request_referrer_fee_bps,
+            self.ride_offer_referrer_fee_bps,
         )
         .await;
 

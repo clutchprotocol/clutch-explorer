@@ -16,12 +16,12 @@ pub fn normalize_hex_address(value: &str) -> Option<String> {
     Some(format!("0x{}", body.to_ascii_lowercase()))
 }
 
-/// Match clutch-node RidePay referrer fee rounding (ceiling division).
-pub fn referrer_fee_ceiling(percent: u8, fare: u64) -> u64 {
-    if percent == 0 || fare == 0 {
+/// Match clutch-node RidePay referrer fee rounding (basis points, floor division).
+pub fn referrer_fee_bps(bps: u16, fare: u64) -> u64 {
+    if bps == 0 || fare == 0 {
         return 0;
     }
-    (percent as u64 * fare + 99) / 100
+    (fare as u128 * bps as u128 / 10_000) as u64
 }
 
 pub fn parse_referrer(arguments: &Value) -> Option<String> {
@@ -70,8 +70,8 @@ async fn load_payload(
 pub async fn enrich_transactions(
     pool: &PgPool,
     txs: &mut [RawTransaction],
-    request_fee_percent: u8,
-    offer_fee_percent: u8,
+    request_fee_bps: u16,
+    offer_fee_bps: u16,
 ) {
     let mut block_cache: HashMap<String, Value> = HashMap::new();
     for tx in txs.iter() {
@@ -131,11 +131,11 @@ pub async fn enrich_transactions(
 
                 let mut request_fee = 0u64;
                 let mut offer_fee = 0u64;
-                if request_referrer.is_some() && request_fee_percent > 0 {
-                    request_fee = referrer_fee_ceiling(request_fee_percent, fare);
+                if request_referrer.is_some() && request_fee_bps > 0 {
+                    request_fee = referrer_fee_bps(request_fee_bps, fare);
                 }
-                if offer_referrer.is_some() && offer_fee_percent > 0 {
-                    offer_fee = referrer_fee_ceiling(offer_fee_percent, fare);
+                if offer_referrer.is_some() && offer_fee_bps > 0 {
+                    offer_fee = referrer_fee_bps(offer_fee_bps, fare);
                 }
 
                 tx.request_referrer = request_referrer;
@@ -180,9 +180,10 @@ mod tests {
     }
 
     #[test]
-    fn referrer_fee_ceiling_small_fare() {
-        assert_eq!(referrer_fee_ceiling(2, 3), 1);
-        assert_eq!(referrer_fee_ceiling(2, 50), 1);
-        assert_eq!(referrer_fee_ceiling(2, 100), 2);
+    fn referrer_fee_bps_floors() {
+        // 200 bps = 2%, floored (was ceiling under the old percent scheme).
+        assert_eq!(referrer_fee_bps(200, 3), 0); // floor(0.06) = 0, was ceiling 1
+        assert_eq!(referrer_fee_bps(200, 50), 1); // floor(1.0) = 1, unchanged
+        assert_eq!(referrer_fee_bps(200, 100), 2); // floor(2.0) = 2, unchanged
     }
 }
