@@ -26,9 +26,9 @@ function describe(status: string): { tone: string; headline: string; detail: str
     case "over_backed_drift":
       return {
         tone: "drift",
-        headline: "Over-backed",
+        headline: "Settling",
         detail:
-          "Custody exceeds what the ledger owes. Ordinary for a few seconds around a mint or a burn, when one side has recorded something the other has not yet.",
+          "The ledger has credited more than the chain has minted so far, and custody covers all of it. Ordinary while a mint is in flight. If it persists, it means CLT someone is owed has not been issued yet.",
       };
     case "mismatch":
       return {
