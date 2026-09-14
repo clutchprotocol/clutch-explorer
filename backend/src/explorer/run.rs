@@ -4,6 +4,7 @@ use crate::explorer::db::{cleanup_database, run_migrations};
 use crate::explorer::indexer::IndexerService;
 use crate::explorer::ingestion::NodeHttpIngestionSource;
 use crate::explorer::shutdown::wait_for_shutdown;
+use crate::explorer::reserve::ReserveClient;
 use crate::explorer::state::{AppState, ExplorerService};
 use crate::explorer::tracing::setup_tracing;
 use sqlx::PgPool;
@@ -33,7 +34,8 @@ pub async fn run_api(config: AppConfig) -> Result<(), Box<dyn std::error::Error>
     };
 
     let service = Arc::new(ExplorerService::new(config.clone(), pg_pool.clone())?);
-    let app_state = AppState { service };
+    let reserve = ReserveClient::new(config.treasury_public_reconciliation_url.clone());
+    let app_state = AppState { service, reserve };
     let app = build_router(app_state, &config.allowed_origins)?;
 
     let listener = TcpListener::bind(&config.listen_addr).await?;

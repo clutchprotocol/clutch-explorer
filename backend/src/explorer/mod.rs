@@ -12,6 +12,7 @@ pub mod postgres_repository;
 pub mod activity;
 pub mod referrer;
 pub mod repository;
+pub mod reserve;
 pub mod run;
 pub mod seq;
 pub mod state;
