@@ -4,6 +4,7 @@ import type {
   BlockDetail,
   BlockListItem,
   ListResponse,
+  Reserve,
   SearchResult,
   Stats,
   TransactionDetail,
@@ -36,6 +37,7 @@ async function api<T>(path: string): Promise<T> {
 
 export const explorerApi = {
   getStats: () => api<Stats>("/v1/stats"),
+  getReserve: () => api<Reserve>("/v1/reserve"),
   getBlocks: (limit = 20, offset = 0) =>
     api<ListResponse<BlockListItem>>(`/v1/blocks?limit=${limit}&offset=${offset}`),
   getBlockById: (id: string) => api<BlockDetail>(`/v1/blocks/${encodeURIComponent(id)}`),

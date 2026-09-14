@@ -27,3 +27,13 @@ export function formatHexAddress(value: string | null | undefined): string | nul
   if (!body) return null;
   return `0x${body.toLowerCase()}`;
 }
+
+/// CLT is an integer micro-dollar: 1 USD = 1,000,000 CLT. Rendering the raw integer is how a
+/// reader concludes the supply is a trillion of something.
+export function formatClt(microDollars: number) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(microDollars / 1_000_000);
+}
