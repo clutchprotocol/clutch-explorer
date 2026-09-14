@@ -1,0 +1,35 @@
+# Run the backend's tests.
+#
+# They existed before this workflow did and had never run in CI: the only automation here built
+# Docker images, which proves the code compiles and nothing about whether it is right. Thirteen
+# tests across activity, indexer, referrer and reserve were passing or failing unobserved.
+#
+# No database needed — these are unit tests over pure logic and a refused TCP connect. The
+# repository and handler layers have no tests yet; when they get them they will need a Postgres
+# service here.
+
+name: Test
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - name: Test
+        working-directory: backend
+        run: cargo test --all-targets

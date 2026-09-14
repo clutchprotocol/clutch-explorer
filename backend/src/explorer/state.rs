@@ -8,12 +8,17 @@ use crate::explorer::node_client::NodeClient;
 use crate::explorer::node_repository::NodeRepository;
 use crate::explorer::postgres_repository::PostgresRepository;
 use crate::explorer::repository::ExplorerRepository;
+use crate::explorer::reserve::ReserveClient;
 use sqlx::PgPool;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
     pub service: Arc<ExplorerService>,
+    /// Separate from `service` on purpose: everything there reads this explorer's own database,
+    /// and this reaches another service that may be absent or down. Keeping them apart means a
+    /// treasury outage cannot present itself as an explorer failure.
+    pub reserve: ReserveClient,
 }
 
 pub struct ExplorerService {

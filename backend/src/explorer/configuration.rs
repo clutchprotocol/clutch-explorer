@@ -65,6 +65,12 @@ pub struct AppConfig {
     pub indexer_poll_interval_ms: u64,
     #[serde(default = "default_indexer_start_height")]
     pub indexer_start_height: u64,
+    /// The treasury's published reconciliation, republished by /api/v1/reserve.
+    ///
+    /// Empty switches the section off rather than failing: an explorer indexing a chain with no
+    /// treasury behind it is a real deployment, and the rest of the API does not depend on this.
+    #[serde(default)]
+    pub treasury_public_reconciliation_url: String,
     /// Match clutch-node `ride_request_referrer_fee_bps` for RidePay display.
     #[serde(default = "default_referrer_fee_bps")]
     pub ride_request_referrer_fee_bps: u16,

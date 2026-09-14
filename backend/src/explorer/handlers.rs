@@ -242,6 +242,16 @@ pub async fn get_stats(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+/// The reserve position behind CLT: supply, liability and custody from a single reconciliation
+/// run, with that run's timestamp and the age of this answer.
+///
+/// Always 200. "The treasury is unreachable" and "no run has happened yet" are both states a
+/// reader needs to see, and a status code would push a consumer into an error branch that hides
+/// which one it is.
+pub async fn get_reserve(State(state): State<AppState>) -> impl IntoResponse {
+    (StatusCode::OK, Json(state.reserve.latest().await))
+}
+
 pub async fn search(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,

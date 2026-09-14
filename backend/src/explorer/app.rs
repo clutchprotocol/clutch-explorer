@@ -36,6 +36,7 @@ pub fn build_router(
         .route("/api/v1/validators", get(handlers::list_validators))
         .route("/api/v1/search", get(handlers::search))
         .route("/api/v1/stats", get(handlers::get_stats))
+        .route("/api/v1/reserve", get(handlers::get_reserve))
         .with_state(app_state)
         .layer(cors);
 
