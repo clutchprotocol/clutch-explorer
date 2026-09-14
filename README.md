@@ -48,8 +48,26 @@ Default UI port: `5174` (when run via compose) or `5173` (standalone Vite defaul
 | `GET /api/v1/validators` | Validator set |
 | `GET /api/v1/search?q=` | Search |
 | `GET /api/v1/stats` | Network stats |
+| `GET /api/v1/reserve` | The reserve position behind CLT |
 
 Full reference: https://docs.clutchprotocol.io/clutch-explorer/api-reference
+
+### `/api/v1/reserve`
+
+CLT claims to be fully reserved, and that claim is checkable only if both sides of it are visible.
+This republishes the treasury's last reconciliation: what the chain says exists, what the ledger
+says is owed, and what is actually held against it.
+
+Every figure comes from a **single run**, with that run's timestamp. Live chain supply is
+deliberately not mixed in: a mint moves supply at once and the reserve figure only at the next run,
+so the pair would disagree routinely and ordinary lag would read as a shortfall.
+
+It never serves a stale cache on failure — an unreachable treasury is reported as unreachable, not
+as the last known figures, because a page still showing "matched" reports a verification that is not
+happening. `configured: false` means this deployment has no treasury behind it, which is a real
+configuration rather than an error, and the frontend renders nothing at all in that case.
+
+Set `APP_TREASURY_PUBLIC_RECONCILIATION_URL` to switch it on.
 
 ## Indexer
 
