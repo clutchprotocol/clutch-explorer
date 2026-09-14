@@ -82,8 +82,15 @@ impl IndexerService {
         Ok(self.start_height)
     }
 
+    /// Upsert, not `UPDATE`. An `UPDATE` whose row is missing affects zero rows and returns
+    /// `Ok`, so the indexer went on counting in memory while persisting nothing -- observed on
+    /// stage as a cursor walking 295 to 303 in the logs above an `indexer_cursor` table with no
+    /// rows in it at all. Whatever removes the row, the next poll puts it back.
     async fn set_cursor(&self, height: u64) -> Result<(), ExplorerError> {
-        sqlx::query("UPDATE indexer_cursor SET last_indexed_height = $1, updated_at = NOW() WHERE id = 1")
+        sqlx::query(
+            "INSERT INTO indexer_cursor (id, last_indexed_height, updated_at) VALUES (1, $1, NOW()) \
+             ON CONFLICT (id) DO UPDATE SET last_indexed_height = EXCLUDED.last_indexed_height, updated_at = NOW()",
+        )
             .bind(height as i64)
             .execute(&self.pool)
             .await
