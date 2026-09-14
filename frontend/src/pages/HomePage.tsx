@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { explorerApi } from "../api/client";
-import type { BlockListItem, Stats, TransactionListItem, Validator } from "../api/types";
+import type { BlockListItem, Reserve, Stats, TransactionListItem, Validator } from "../api/types";
 import { ErrorBanner, LoadingState, Panel, StatCard } from "../components/ui";
+import { ReservePanel } from "../components/ReservePanel";
 import { formatNumber, formatRelativeTime, shortHash } from "../utils/format";
 
 export function HomePage() {
@@ -10,6 +11,7 @@ export function HomePage() {
   const [blocks, setBlocks] = useState<BlockListItem[]>([]);
   const [txs, setTxs] = useState<TransactionListItem[]>([]);
   const [validators, setValidators] = useState<Validator[]>([]);
+  const [reserve, setReserve] = useState<Reserve | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -17,17 +19,21 @@ export function HomePage() {
     let disposed = false;
     const load = async () => {
       try {
-        const [statsRes, blocksRes, txRes, validatorsRes] = await Promise.all([
+        const [statsRes, blocksRes, txRes, validatorsRes, reserveRes] = await Promise.all([
           explorerApi.getStats(),
           explorerApi.getBlocks(8, 0),
           explorerApi.getTransactions(8, 0),
           explorerApi.getValidators(6, 0),
+          // Settled separately: the reserve comes from another service, and its being down must
+          // not blank the block list. The panel renders its own unavailable state instead.
+          explorerApi.getReserve().catch(() => null),
         ]);
         if (disposed) return;
         setStats(statsRes);
         setBlocks(blocksRes.items);
         setTxs(txRes.items);
         setValidators(validatorsRes.items);
+        setReserve(reserveRes);
         setError("");
       } catch (err) {
         if (!disposed) setError((err as Error).message);
@@ -57,6 +63,8 @@ export function HomePage() {
           <StatCard label="Active Validators" value={stats.active_validators} />
         </section>
       ) : null}
+
+      <ReservePanel reserve={reserve} />
 
       <Panel title="Latest Blocks">
         <table className="data-table">

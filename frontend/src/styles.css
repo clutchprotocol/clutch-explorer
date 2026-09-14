@@ -203,3 +203,32 @@ button {
   font-size: 0.9rem;
   color: #b8cce8;
 }
+
+/* ===== Reserve panel ===== */
+/* Three tones rather than pass/fail: over-backed drift is ordinarily benign and colouring it red
+   would teach readers to ignore the colour. */
+.reserve-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--border, #444);
+  margin-bottom: 1rem;
+}
+.reserve-status strong { font-size: 1rem; }
+.reserve-status span { font-size: 0.85rem; opacity: 0.8; line-height: 1.5; }
+.reserve-status--ok { border-left-color: #2f9e63; }
+.reserve-status--drift { border-left-color: #c99a2e; }
+.reserve-status--bad { border-left-color: #c0392b; }
+
+.reserve-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin: 0 0 0.75rem;
+}
+.reserve-figures dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
+.reserve-figures dd { margin: 0.2rem 0 0; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+
+.reserve-meta { font-size: 0.78rem; opacity: 0.65; margin: 0; }
+.reserve-unavailable { font-size: 0.85rem; opacity: 0.75; line-height: 1.55; margin: 0; }

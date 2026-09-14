@@ -92,3 +92,29 @@ export type SearchResult = {
   identifier: string;
   summary: string;
 };
+
+/// The reserve position behind CLT, from the treasury's last reconciliation run.
+///
+/// Every number comes from that single run, so they are consistent with each other — the reason
+/// live chain supply is deliberately not mixed in here.
+export type ReserveRun = {
+  run_at: string;
+  onchain_supply: number;
+  genesis_allocation: number;
+  treasury_minted: number;
+  ledger_liability: number;
+  custody_reported: number;
+  /// "ok" | "over_backed_drift" | "mismatch" — passed through raw rather than reduced to a
+  /// boolean, because the middle one is ordinarily benign and a boolean would call it a failure.
+  status: string;
+};
+
+export type Reserve = {
+  /// False when this deployment has no treasury behind it; the section is then not rendered.
+  configured: boolean;
+  /// False when the treasury could not be reached. Never accompanied by stale figures.
+  available?: boolean;
+  error?: string;
+  last_run?: ReserveRun | null;
+  cache_age_seconds?: number;
+};
