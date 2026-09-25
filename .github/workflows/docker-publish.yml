@@ -89,15 +89,35 @@ jobs:
           build-args: |
             VITE_EXPLORER_API_URL=/api
 
+  # clutch-deploy pins every image to an exact tag and deploys only what is pinned, so the dispatch
+  # names the tags this run pushed: metadata-action's type=sha, sha-<first 7 of the commit>, the same
+  # for both images. clutch-deploy checks that ghcr.io has them, pins them, and moves no other image.
+  #
+  # No `continue-on-error` any more. With pins, a dispatch that fails leaves the new images unpinned:
+  # stage keeps the old ones while this run reports green. A failed dispatch must look failed.
   trigger-stage-deploy:
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     steps:
+      - name: Check the dispatch token is present
+        env:
+          TOKEN: ${{ secrets.CLUTCH_DEPLOY_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::CLUTCH_DEPLOY_DISPATCH_TOKEN is not set on this repository."
+            echo "::error::The images WERE pushed. Stage will NOT deploy them."
+            exit 1
+          fi
+
+      - name: Name the tag this run pushed
+        id: tag
+        run: echo "sha=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Trigger deploy-stage in clutch-deploy
-        continue-on-error: true
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.CLUTCH_DEPLOY_DISPATCH_TOKEN }}
           repository: clutchprotocol/clutch-deploy
           event-type: deploy-stage
+          client-payload: '{"set_images": "clutch-explorer-backend=${{ steps.tag.outputs.sha }} clutch-explorer-frontend=${{ steps.tag.outputs.sha }}"}'
