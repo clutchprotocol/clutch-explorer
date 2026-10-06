@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
     AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
-    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
+    TransactionDetailDto, TransactionFilter, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::node_client::{NodeClient, NodeClientError};
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
@@ -42,12 +42,11 @@ impl ExplorerRepository for NodeRepository {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<String>,
-        status: Option<String>,
+        filter: TransactionFilter,
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>> {
         Box::pin(async move {
             self.node_client
-                .latest_transactions(limit, offset, address.as_deref(), status.as_deref())
+                .latest_transactions(limit, offset, &filter)
                 .await
                 .map_err(map_node_error)
         })
@@ -105,20 +104,10 @@ impl ExplorerRepository for NodeRepository {
                 return Ok(Vec::new());
             }
 
-            if q.starts_with("0xtx") {
-                let tx = self
-                    .node_client
-                    .transaction_by_hash(&q)
-                    .await
-                    .map_err(map_node_error)?;
-                return Ok(vec![SearchResultDto {
-                    kind: "transaction".to_string(),
-                    identifier: tx.hash,
-                    summary: format!("Transaction in block {}", tx.block_height),
-                }]);
-            }
+            let body = q.trim_start_matches("0x").trim_start_matches("0X");
+            let is_hex = !body.is_empty() && body.chars().all(|c| c.is_ascii_hexdigit());
 
-            if q.starts_with("0x") {
+            if is_hex && body.len() == 40 {
                 let account = self
                     .node_client
                     .account_by_address(&q)
@@ -129,6 +118,17 @@ impl ExplorerRepository for NodeRepository {
                     identifier: account.address,
                     summary: format!("Account with {} txs", account.tx_count),
                 }]);
+            }
+
+            // A 64-hex value is either a transaction or a block hash; try the transaction first.
+            if is_hex && q.parse::<u64>().is_err() {
+                if let Ok(tx) = self.node_client.transaction_by_hash(body).await {
+                    return Ok(vec![SearchResultDto {
+                        kind: "transaction".to_string(),
+                        identifier: tx.hash,
+                        summary: format!("Transaction in block {}", tx.block_height),
+                    }]);
+                }
             }
 
             let block = self

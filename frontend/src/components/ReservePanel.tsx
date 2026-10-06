@@ -42,7 +42,7 @@ function describe(status: string): { tone: string; headline: string; detail: str
   }
 }
 
-export function ReservePanel({ reserve }: { reserve: Reserve | null }) {
+export function ReservePanel({ reserve }: { reserve: Reserve | null | undefined }) {
   // No treasury behind this deployment: there is nothing to claim, so claim nothing.
   if (!reserve || !reserve.configured) return null;
 
@@ -61,46 +61,58 @@ export function ReservePanel({ reserve }: { reserve: Reserve | null }) {
   if (!run) {
     return (
       <Panel title="Reserve">
-        <p className="reserve-unavailable">
-          No reconciliation has run against this chain yet.
-        </p>
+        <p className="reserve-unavailable">No reconciliation has run against this chain yet.</p>
       </Panel>
     );
   }
 
   const { tone, headline, detail } = describe(run.status);
+  // How far custody covers what the ledger owes, for the bar. Capped: over-coverage is not a
+  // bigger bar, it is a full one.
+  const coverage =
+    run.ledger_liability > 0 ? Math.min(1, run.custody_reported / run.ledger_liability) : 1;
 
   return (
-    <Panel title="Reserve">
-      <div className={`reserve-status reserve-status--${tone}`}>
-        <strong>{headline}</strong>
-        <span>{detail}</span>
+    <Panel title="Reserve behind CLT">
+      <div className="reserve">
+        <div className={`reserve-status reserve-status--${tone}`}>
+          <strong>{headline}</strong>
+          <span>{detail}</span>
+        </div>
+
+        <dl className="reserve-figures">
+          <div>
+            <dt>CLT issued</dt>
+            <dd>{formatClt(run.treasury_minted)}</dd>
+          </div>
+          <div>
+            <dt>Owed by the ledger</dt>
+            <dd>{formatClt(run.ledger_liability)}</dd>
+          </div>
+          <div>
+            <dt>Held in custody</dt>
+            <dd>{formatClt(run.custody_reported)}</dd>
+          </div>
+        </dl>
+
+        <div
+          className={`reserve-bar reserve-bar--${tone}`}
+          role="img"
+          aria-label={`Custody covers ${Math.round(coverage * 100)}% of what the ledger owes`}
+        >
+          <span style={{ width: `${coverage * 100}%` }} />
+        </div>
+
+        <p className="reserve-meta">
+          From the treasury's reconciliation {formatRelativeTime(run.run_at)}
+          {typeof reserve.cache_age_seconds === "number" && reserve.cache_age_seconds > 0
+            ? ` · read ${reserve.cache_age_seconds}s ago`
+            : ""}
+          {run.onchain_supply !== run.treasury_minted
+            ? ` · ${formatClt(run.genesis_allocation)} allocated at genesis is excluded`
+            : ""}
+        </p>
       </div>
-
-      <dl className="reserve-figures">
-        <div>
-          <dt>CLT issued</dt>
-          <dd>{formatClt(run.treasury_minted)}</dd>
-        </div>
-        <div>
-          <dt>Owed by the ledger</dt>
-          <dd>{formatClt(run.ledger_liability)}</dd>
-        </div>
-        <div>
-          <dt>Held in custody</dt>
-          <dd>{formatClt(run.custody_reported)}</dd>
-        </div>
-      </dl>
-
-      <p className="reserve-meta">
-        As of {formatRelativeTime(run.run_at)}
-        {typeof reserve.cache_age_seconds === "number" && reserve.cache_age_seconds > 0
-          ? ` · read ${reserve.cache_age_seconds}s ago`
-          : ""}
-        {run.onchain_supply !== run.treasury_minted
-          ? ` · ${formatClt(run.genesis_allocation)} allocated at genesis is excluded`
-          : ""}
-      </p>
     </Panel>
   );
 }

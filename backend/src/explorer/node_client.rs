@@ -1,6 +1,6 @@
 use crate::explorer::models::{
     AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, StatsDto, TransactionDetailDto,
-    TransactionListItemDto, ValidatorDto,
+    TransactionFilter, TransactionListItemDto, ValidatorDto,
 };
 use chrono::Utc;
 use reqwest::Client;
@@ -191,15 +191,20 @@ impl NodeClient {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<&str>,
-        status: Option<&str>,
+        filter: &TransactionFilter,
     ) -> Result<Vec<TransactionListItemDto>, NodeClientError> {
         let mut path = format!("api/v1/transactions?limit={}&offset={}", limit, offset);
-        if let Some(addr) = address {
+        if let Some(height) = filter.block {
+            path.push_str(&format!("&block={}", height));
+        }
+        if let Some(addr) = &filter.address {
             path.push_str(&format!("&address={}", addr));
         }
-        if let Some(st) = status {
+        if let Some(st) = &filter.status {
             path.push_str(&format!("&status={}", st));
+        }
+        if let Some(tx_type) = &filter.tx_type {
+            path.push_str(&format!("&type={}", tx_type));
         }
 
         if let Ok(payload) = self.get_json(&path).await {
@@ -284,7 +289,7 @@ impl NodeClient {
                 to: format!("0xto{:040x}", (index + 1) % 1000),
                 amount: 100 + index as u64,
                 fee: 1,
-                status: status.unwrap_or("confirmed").to_string(),
+                status: filter.status.as_deref().unwrap_or("confirmed").to_string(),
                 function_call_type: "Transfer".to_string(),
                 is_ride_related: false,
                 timestamp: now - chrono::TimeDelta::seconds(index as i64 * 4),

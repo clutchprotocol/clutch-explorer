@@ -2,7 +2,7 @@ use crate::explorer::configuration::AppConfig;
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
     AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
-    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
+    TransactionDetailDto, TransactionFilter, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::node_client::NodeClient;
 use crate::explorer::node_repository::NodeRepository;
@@ -64,16 +64,10 @@ impl ExplorerService {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<&str>,
-        status: Option<&str>,
+        filter: TransactionFilter,
     ) -> Result<Vec<TransactionListItemDto>, ExplorerError> {
         self.repository
-            .get_transactions(
-                limit,
-                offset,
-                address.map(String::from),
-                status.map(String::from),
-            )
+            .get_transactions(limit, offset, filter)
             .await
     }
 

@@ -1,4 +1,6 @@
-use crate::explorer::activity::{parse_balance_effects_from_tx, parse_block_balance_effects, ParsedBalanceEffect};
+use crate::explorer::activity::{
+    fee_paid, parse_balance_effects_from_tx, parse_block_balance_effects, ParsedBalanceEffect,
+};
 use crate::explorer::error::ExplorerError;
 use chrono::{DateTime, TimeZone, Utc};
 use futures_util::{SinkExt, StreamExt};
@@ -326,7 +328,7 @@ impl NodeIngestionSource for NodeHttpIngestionSource {
                     from,
                     to,
                     amount,
-                    fee: 0,
+                    fee: fee_paid(&balance_effects),
                     status: "confirmed".to_string(),
                     function_call_type,
                     is_ride_related,

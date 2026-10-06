@@ -1,115 +1,91 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { explorerApi } from "../api/client";
-import type { TransactionListItem } from "../api/types";
-import { ErrorBanner, LoadingState, Panel } from "../components/ui";
-import { formatRelativeTime, shortHash } from "../utils/format";
+import { TransactionsTable } from "../components/tables";
+import { ErrorBanner, PageHeader, Pagination, Panel, Skeleton } from "../components/ui";
+import { useApi } from "../hooks/useApi";
+import { usePage } from "../hooks/usePage";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 25;
+
+/** The transaction types a reader would filter by, grouped the way the chain uses them. */
+const TYPE_GROUPS: { label: string; types: string[] }[] = [
+  { label: "Payments", types: ["Transfer"] },
+  {
+    label: "Rides",
+    types: ["RideRequest", "RideOffer", "RideAcceptance", "RidePay", "RideCancel", "RideRequestCancel"],
+  },
+  { label: "Treasury", types: ["Mint", "Burn"] },
+];
+
+const spaced = (type: string) => type.replace(/([a-z])([A-Z])/g, "$1 $2");
 
 export function TransactionsPage() {
-  const [items, setItems] = useState<TransactionListItem[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [status, setStatus] = useState("");
-  const [address, setAddress] = useState("");
-  const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = usePage();
+  const [params, setParams] = useSearchParams();
+  // `status` is honoured if a link carries it, but not offered: the indexer stores "confirmed"
+  // for every transaction today, so a status picker could not narrow anything.
+  const status = params.get("status") ?? "";
+  const type = params.get("type") ?? "";
 
-  useEffect(() => {
-    let disposed = false;
-    const load = async () => {
-      try {
-        const response = await explorerApi.getTransactions(
-          PAGE_SIZE,
-          offset,
-          address || undefined,
-          status || undefined
-        );
-        if (disposed) return;
-        setItems(response.items);
-        setHasMore(response.paging.has_more);
-        setError("");
-      } catch (err) {
-        if (!disposed) setError((err as Error).message);
-      } finally {
-        if (!disposed) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      disposed = true;
-    };
-  }, [offset, status, address]);
+  const { data, error } = useApi(
+    () =>
+      explorerApi.getTransactions(PAGE_SIZE, (page - 1) * PAGE_SIZE, {
+        status: status || undefined,
+        type: type || undefined,
+      }),
+    [page, status, type],
+    // The newest page follows the chain; older pages hold still while you read them.
+    page === 1 ? 10_000 : undefined,
+  );
 
-  if (loading) return <LoadingState />;
+  const setFilter = (key: "status" | "type", value: string) => {
+    const updated = new URLSearchParams(params);
+    updated.delete("page");
+    if (value) updated.set(key, value);
+    else updated.delete(key);
+    setParams(updated);
+  };
+
+  const describe = [type ? spaced(type) : "", status].filter(Boolean).join(", ");
 
   return (
-    <Panel title="Transactions">
-      <ErrorBanner message={error} />
-      <div className="toolbar">
-        <input
-          placeholder="Filter by address"
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-        />
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">Any status</option>
-          <option value="confirmed">confirmed</option>
-          <option value="pending">pending</option>
-          <option value="failed">failed</option>
-        </select>
-      </div>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Hash</th>
-            <th>Block</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Amount</th>
-            <th>Status</th>
-            <th>Age</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((tx) => (
-            <tr key={tx.hash}>
-              <td>
-                <Link to={`/txs/${tx.hash}`}>{shortHash(tx.hash)}</Link>
-                {tx.is_ride_related && (
-                  <span className="ride-badge" title={tx.function_call_type}>
-                    🚕 RIDE
-                  </span>
-                )}
-              </td>
-              <td>
-                <Link to={`/blocks/${tx.block_height}`}>{tx.block_height}</Link>
-              </td>
-              <td>
-                <Link to={`/address/${tx.from}`}>{shortHash(tx.from)}</Link>
-              </td>
-              <td>
-                <Link to={`/address/${tx.to}`}>{shortHash(tx.to)}</Link>
-              </td>
-              <td>{tx.amount}</td>
-              <td>
-                <span className={`status-pill ${tx.status}`}>{tx.status}</span>
-              </td>
-              <td>{formatRelativeTime(tx.timestamp)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="pagination">
-        <button onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}>
-          Previous
-        </button>
-        <span>Offset {offset}</span>
-        <button onClick={() => setOffset((current) => current + PAGE_SIZE)} disabled={!hasMore}>
-          Next
-        </button>
-      </div>
-    </Panel>
+    <div className="page-grid">
+      <PageHeader eyebrow="Chain" title="Transactions">
+        <p className="lede">Transfers, ride steps, mints and burns, newest first.</p>
+      </PageHeader>
+      <ErrorBanner message={error?.message} />
+      <Panel
+        flush
+        actions={
+          <div className="filters">
+            <label className="select">
+              <span className="visually-hidden">Type</span>
+              <select value={type} onChange={(event) => setFilter("type", event.target.value)}>
+                <option value="">All types</option>
+                {TYPE_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.types.map((t) => (
+                      <option key={t} value={t}>
+                        {spaced(t)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          </div>
+        }
+      >
+        {data ? (
+          <TransactionsTable
+            transactions={data.items}
+            empty={describe ? `No ${describe} transactions.` : "No transactions indexed yet."}
+          />
+        ) : error ? null : (
+          <Skeleton rows={12} />
+        )}
+        <Pagination page={page} hasMore={Boolean(data?.paging.has_more)} onChange={setPage} />
+      </Panel>
+    </div>
   );
 }

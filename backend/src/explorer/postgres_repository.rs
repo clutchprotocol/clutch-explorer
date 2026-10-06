@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
     AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
-    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
+    TransactionDetailDto, TransactionFilter, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::referrer::normalize_hex_address;
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
@@ -169,8 +169,7 @@ impl ExplorerRepository for PostgresRepository {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<String>,
-        status: Option<String>,
+        filter: TransactionFilter,
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>> {
         Box::pin(async move {
             let mut sql = String::from(
@@ -182,40 +181,66 @@ impl ExplorerRepository for PostgresRepository {
             );
 
             let mut where_clauses = Vec::new();
+            let mut next_param = 1;
+            // Transaction rows keep the address the node reported, which may or may not carry the
+            // `0x` prefix, so match both spellings of the one the reader gave.
+            let TransactionFilter {
+                address,
+                status,
+                block,
+                tx_type,
+            } = filter;
+            let address = address.map(|addr| {
+                let body = addr
+                    .trim()
+                    .trim_start_matches("0x")
+                    .trim_start_matches("0X")
+                    .to_lowercase();
+                (format!("0x{}", body), body)
+            });
             if address.is_some() {
-                where_clauses.push("(LOWER(from_address) = LOWER($1) OR LOWER(to_address) = LOWER($1))");
+                where_clauses.push(format!(
+                    "(LOWER(from_address) IN (${0}, ${1}) OR LOWER(to_address) IN (${0}, ${1}))",
+                    next_param,
+                    next_param + 1
+                ));
+                next_param += 2;
             }
             if status.is_some() {
-                where_clauses.push(if address.is_some() {
-                    "status = $2"
-                } else {
-                    "status = $1"
-                });
+                where_clauses.push(format!("status = ${}", next_param));
+                next_param += 1;
+            }
+            if block.is_some() {
+                where_clauses.push(format!("block_height = ${}", next_param));
+                next_param += 1;
+            }
+            if tx_type.is_some() {
+                where_clauses.push(format!("function_call_type = ${}", next_param));
+                next_param += 1;
             }
             if !where_clauses.is_empty() {
                 sql.push_str(" WHERE ");
                 sql.push_str(&where_clauses.join(" AND "));
             }
 
-            let lim_idx = if address.is_some() && status.is_some() {
-                3
-            } else if address.is_some() || status.is_some() {
-                2
-            } else {
-                1
-            };
             sql.push_str(&format!(
                 " ORDER BY block_height DESC, tx_index ASC LIMIT ${} OFFSET ${}",
-                lim_idx,
-                lim_idx + 1
+                next_param,
+                next_param + 1
             ));
 
             let mut query = sqlx::query_as::<_, TxRow>(&sql);
-            if let Some(addr) = address {
-                query = query.bind(addr);
+            if let Some((prefixed, bare)) = address {
+                query = query.bind(prefixed).bind(bare);
             }
             if let Some(st) = status {
                 query = query.bind(st);
+            }
+            if let Some(height) = block {
+                query = query.bind(height as i64);
+            }
+            if let Some(tx_type) = tx_type {
+                query = query.bind(tx_type);
             }
             let rows = query
                 .bind(limit as i64)
@@ -505,12 +530,35 @@ impl ExplorerRepository for PostgresRepository {
                     .await
                     .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
+            // Both rates come from the newest 100 blocks: the span between the first and last of
+            // them, the number of gaps, and the transactions they carry.
+            let (span_seconds, gaps, recent_txs) = sqlx::query_as::<_, (Option<f64>, i64, Option<i64>)>(
+                r#"
+                SELECT EXTRACT(EPOCH FROM MAX(timestamp) - MIN(timestamp))::float8,
+                       GREATEST(COUNT(*) - 1, 0),
+                       SUM(tx_count)::bigint
+                FROM (SELECT timestamp, tx_count FROM blocks ORDER BY height DESC LIMIT 100) recent
+                "#,
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+            let span_seconds = span_seconds.unwrap_or(0.0);
+            let (avg_block_time_seconds, tx_per_second) = if gaps > 0 && span_seconds > 0.0 {
+                (
+                    span_seconds / gaps as f64,
+                    recent_txs.unwrap_or(0) as f64 / span_seconds,
+                )
+            } else {
+                (0.0, 0.0)
+            };
+
             Ok(StatsDto {
                 latest_height: latest_height as u64,
-                tx_per_second: 0.0,
+                tx_per_second,
                 total_transactions: total_transactions as u64,
                 active_validators: active_validators as usize,
-                avg_block_time_seconds: 0.0,
+                avg_block_time_seconds,
             })
         })
     }
@@ -523,70 +571,88 @@ impl ExplorerRepository for PostgresRepository {
             }
             let mut items = Vec::new();
 
-            if q.starts_with("0x") {
-                if sqlx::query_scalar::<_, Option<String>>(
-                    "SELECT hash FROM transactions WHERE hash = $1 LIMIT 1",
-                )
-                .bind(&q)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|e| ExplorerError::Storage(e.to_string()))?
-                .is_some()
-                {
-                    items.push(SearchResultDto {
-                        kind: "transaction".to_string(),
-                        identifier: q.clone(),
-                        summary: "Transaction hash match".to_string(),
-                    });
-                }
-
-                if sqlx::query_scalar::<_, Option<String>>(
-                    "SELECT address FROM accounts WHERE address = $1 LIMIT 1",
-                )
-                .bind(&q)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|e| ExplorerError::Storage(e.to_string()))?
-                .is_some()
-                {
-                    items.push(SearchResultDto {
-                        kind: "account".to_string(),
-                        identifier: q.clone(),
-                        summary: "Account address match".to_string(),
-                    });
-                }
-
-                if sqlx::query_scalar::<_, Option<String>>(
-                    "SELECT hash FROM blocks WHERE hash = $1 LIMIT 1",
-                )
-                .bind(&q)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|e| ExplorerError::Storage(e.to_string()))?
-                .is_some()
-                {
-                    items.push(SearchResultDto {
-                        kind: "block".to_string(),
-                        identifier: q.clone(),
-                        summary: "Block hash match".to_string(),
-                    });
-                }
-            } else if let Ok(height) = q.parse::<i64>() {
-                if sqlx::query_scalar::<_, Option<i64>>(
+            if let Ok(height) = q.parse::<i64>() {
+                let found = sqlx::query_scalar::<_, i64>(
                     "SELECT height FROM blocks WHERE height = $1 LIMIT 1",
                 )
                 .bind(height)
-                .fetch_one(&self.pool)
+                .fetch_optional(&self.pool)
                 .await
-                .map_err(|e| ExplorerError::Storage(e.to_string()))?
-                .is_some()
-                {
+                .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+                if let Some(height) = found {
                     items.push(SearchResultDto {
                         kind: "block".to_string(),
-                        identifier: q.clone(),
+                        identifier: height.to_string(),
                         summary: "Block height match".to_string(),
                     });
                 }
+                return Ok(items);
+            }
+
+            // The indexer stores hashes exactly as the node reports them: transaction hashes with a
+            // `0x` prefix, block hashes without. Addresses are stored canonical (`0x` + lowercase).
+            // Accept either spelling from the reader and match both forms.
+            let body = q
+                .strip_prefix("0x")
+                .or_else(|| q.strip_prefix("0X"))
+                .unwrap_or(&q)
+                .to_lowercase();
+            if body.is_empty() || !body.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Ok(items);
+            }
+            let prefixed = format!("0x{}", body);
+
+            if let Some(hash) = sqlx::query_scalar::<_, String>(
+                "SELECT hash FROM transactions WHERE LOWER(hash) IN ($1, $2) LIMIT 1",
+            )
+            .bind(&body)
+            .bind(&prefixed)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?
+            {
+                items.push(SearchResultDto {
+                    kind: "transaction".to_string(),
+                    identifier: hash,
+                    summary: "Transaction hash match".to_string(),
+                });
+            }
+
+            if let Some(hash) = sqlx::query_scalar::<_, String>(
+                "SELECT hash FROM blocks WHERE LOWER(hash) IN ($1, $2) LIMIT 1",
+            )
+            .bind(&body)
+            .bind(&prefixed)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ExplorerError::Storage(e.to_string()))?
+            {
+                items.push(SearchResultDto {
+                    kind: "block".to_string(),
+                    identifier: hash,
+                    summary: "Block hash match".to_string(),
+                });
+            }
+
+            if body.len() == 40 {
+                let address = sqlx::query_scalar::<_, String>(
+                    "SELECT address FROM accounts WHERE LOWER(address) IN ($1, $2) \
+                     ORDER BY CASE WHEN LOWER(address) = $1 THEN 0 ELSE 1 END LIMIT 1",
+                )
+                .bind(&prefixed)
+                .bind(&body)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+                items.push(SearchResultDto {
+                    kind: "account".to_string(),
+                    summary: if address.is_some() {
+                        "Account address match".to_string()
+                    } else {
+                        "Address with no indexed activity".to_string()
+                    },
+                    identifier: address.unwrap_or(prefixed),
+                });
             }
 
             Ok(items)

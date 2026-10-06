@@ -6,7 +6,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
-use crate::explorer::models::{ApiErrorDto, ListResponseDto, PagingDto};
+use crate::explorer::models::{ApiErrorDto, ListResponseDto, PagingDto, TransactionFilter};
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -14,6 +14,9 @@ pub struct ListQuery {
     pub offset: Option<usize>,
     pub status: Option<String>,
     pub address: Option<String>,
+    pub block: Option<u64>,
+    #[serde(rename = "type")]
+    pub tx_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -114,8 +117,12 @@ pub async fn list_transactions(
         .get_transactions(
             limit,
             offset,
-            query.address.as_deref(),
-            query.status.as_deref(),
+            TransactionFilter {
+                address: query.address,
+                status: query.status,
+                block: query.block,
+                tx_type: query.tx_type,
+            },
         )
         .await
     {

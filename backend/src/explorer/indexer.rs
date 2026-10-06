@@ -1,4 +1,4 @@
-use crate::explorer::activity::insert_account_activity;
+use crate::explorer::activity::{fees_earned, insert_account_activity};
 use crate::explorer::error::ExplorerError;
 use crate::explorer::ingestion::{NodeIngestionSource, RawHead};
 use crate::explorer::referrer::{enrich_transactions, normalize_hex_address};
@@ -344,6 +344,10 @@ impl IndexerService {
         let reward_recipient = block.reward_recipient.clone();
         let block_reward = block.block_reward as i64;
 
+        // Fetched before the block row is written so the row carries the fees its author earned.
+        let block_data = self.source.fetch_transactions_by_block(height).await?;
+        let total_fees = fees_earned(&block_data.block_balance_effects) as i64;
+
         sqlx::query(
             r#"
             INSERT INTO blocks (height, hash, parent_hash, tx_count, producer, reward_recipient, block_reward, timestamp, total_fees)
@@ -367,14 +371,13 @@ impl IndexerService {
         .bind(reward_recipient)
         .bind(block_reward)
         .bind(block.timestamp)
-        .bind(0i64)
+        .bind(total_fees)
         .execute(&self.pool)
         .await
         .map_err(|e| ExplorerError::Storage(e.to_string()))?;
 
         self.sync_validator_for_producer(&producer).await?;
 
-        let block_data = self.source.fetch_transactions_by_block(height).await?;
         let mut txs = block_data.transactions;
         enrich_transactions(
             &self.pool,
