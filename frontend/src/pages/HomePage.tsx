@@ -67,7 +67,7 @@ export function HomePage() {
           <h1>Every ride, payment and block on the Clutch chain.</h1>
           <p>Look up a block, a transaction or an account, or watch the chain as it grows.</p>
         </div>
-        <SearchBox size="large" />
+        <SearchBox size="large" hotkey />
       </section>
 
       <div className="section-head">

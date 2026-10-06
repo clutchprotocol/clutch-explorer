@@ -589,9 +589,9 @@ impl ExplorerRepository for PostgresRepository {
                 return Ok(items);
             }
 
-            // The indexer stores hashes exactly as the node reports them, which is without a `0x`
-            // prefix, while addresses are stored canonical (`0x` + lowercase). Accept either
-            // spelling from the reader and match both forms.
+            // The indexer stores hashes exactly as the node reports them: transaction hashes with a
+            // `0x` prefix, block hashes without. Addresses are stored canonical (`0x` + lowercase).
+            // Accept either spelling from the reader and match both forms.
             let body = q
                 .strip_prefix("0x")
                 .or_else(|| q.strip_prefix("0X"))

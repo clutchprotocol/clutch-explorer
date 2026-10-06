@@ -24,9 +24,35 @@ pub fn effect_label(kind: &str) -> &'static str {
         "referrer_request_fee" => "Referrer reward (request app)",
         "referrer_offer_fee" => "Referrer reward (offer app)",
         "ride_cancel_refund" => "Ride cancel refund",
+        "ride_auto_release" => "Ride auto-release",
         "block_reward" => "Block reward",
+        "mint" => "Mint",
+        "burn" => "Burn",
+        "tx_fee_paid" => "Network fee",
+        "tx_fee_earned" => "Block fees earned",
         _ => "Balance change",
     }
+}
+
+/// The fee a transaction paid, read from its `tx_fee_paid` effects. The node's transaction payload
+/// carries no fee field, so this is the only place it can be learned. Zero when the node merged
+/// the fee into another write (a ride acceptance folds it into the escrow debit) or when the sender
+/// produced the block (no self-fee).
+pub fn fee_paid(effects: &[ParsedBalanceEffect]) -> u64 {
+    effects
+        .iter()
+        .filter(|e| e.kind == "tx_fee_paid" && e.delta < 0)
+        .map(|e| e.delta.unsigned_abs())
+        .sum()
+}
+
+/// What the block author earned in fees, from the block's `tx_fee_earned` effect.
+pub fn fees_earned(block_effects: &[ParsedBalanceEffect]) -> u64 {
+    block_effects
+        .iter()
+        .filter(|e| e.kind == "tx_fee_earned" && e.delta > 0)
+        .map(|e| e.delta as u64)
+        .sum()
 }
 
 pub fn parse_balance_effects_from_tx(
@@ -287,4 +313,37 @@ mod tests {
         assert_eq!(activity_direction(-3), "out");
         assert_eq!(activity_amount(-3), 3);
     }
+
+    fn effect(kind: &str, delta: i64) -> ParsedBalanceEffect {
+        ParsedBalanceEffect {
+            address: "0x01".to_string(),
+            kind: kind.to_string(),
+            delta,
+            counterparty: None,
+            tx_hash: None,
+            block_height: 1,
+            tx_index: None,
+            function_call_type: None,
+            timestamp: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn fee_paid_sums_only_fee_debits() {
+        let effects = vec![
+            effect("transfer_out", -5_000_000),
+            effect("tx_fee_paid", -1_000),
+            effect("transfer_in", 5_000_000),
+        ];
+        assert_eq!(fee_paid(&effects), 1_000);
+        assert_eq!(fee_paid(&[effect("transfer_out", -10)]), 0);
+    }
+
+    #[test]
+    fn fees_earned_reads_the_block_credit() {
+        let effects = vec![effect("tx_fee_earned", 3_000), effect("block_reward", 7)];
+        assert_eq!(fees_earned(&effects), 3_000);
+        assert_eq!(fees_earned(&[]), 0);
+    }
+
 }

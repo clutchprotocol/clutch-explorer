@@ -109,7 +109,7 @@ export function Layout() {
         </div>
         {isHome ? null : (
           <div className="topbar-search">
-            <SearchBox />
+            <SearchBox hotkey />
           </div>
         )}
       </header>

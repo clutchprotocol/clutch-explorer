@@ -26,7 +26,7 @@ import { formatHexAddress, formatNumber } from "../utils/format";
 
 const PAGE_SIZE = 20;
 
-function ActivityTable({ rows }: { rows: AccountActivity[] }) {
+function ActivityTable({ rows, self }: { rows: AccountActivity[]; self: string }) {
   if (rows.length === 0) return <EmptyState>No balance changes indexed for this address yet.</EmptyState>;
   return (
     <Table>
@@ -47,7 +47,14 @@ function ActivityTable({ rows }: { rows: AccountActivity[] }) {
             <td className="num">
               <Amount value={row.amount} sign={row.direction} />
             </td>
-            <td>{row.counterparty ? <AddressLink address={row.counterparty} /> : <span className="muted">—</span>}</td>
+            <td>
+              {/* The node names the payer as the counterparty of its own fee; that says nothing. */}
+              {row.counterparty && formatHexAddress(row.counterparty) !== self ? (
+                <AddressLink address={row.counterparty} />
+              ) : (
+                <span className="muted">—</span>
+              )}
+            </td>
             <td>{row.tx_hash ? <TxLink hash={row.tx_hash} /> : <span className="muted">—</span>}</td>
             <td>
               <BlockLink height={row.block_height} />
@@ -121,7 +128,7 @@ export function AddressPage() {
         {!list.data ? (
           list.error ? null : <Skeleton rows={10} />
         ) : list.data.kind === "activity" ? (
-          <ActivityTable rows={list.data.items} />
+          <ActivityTable rows={list.data.items} self={address} />
         ) : (
           <TransactionsTable transactions={list.data.items} perspective={address} empty="No transactions for this address yet." />
         )}

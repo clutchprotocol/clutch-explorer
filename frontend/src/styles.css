@@ -1609,3 +1609,38 @@ a.type-badge:hover {
   text-decoration: none;
   filter: brightness(0.95);
 }
+
+.search-kbd {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: calc(var(--search-button-width, 96px) + 18px);
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  pointer-events: none;
+}
+
+.search input:focus ~ .search-kbd {
+  display: none;
+}
+
+.search--large .search-kbd {
+  --search-button-width: 110px;
+}
+
+.hero .search-kbd {
+  background: #eceee8;
+  border-color: #c9cec5;
+  color: #5b6460;
+}
+
+@media (max-width: 640px) {
+  .search-kbd {
+    display: none;
+  }
+}
