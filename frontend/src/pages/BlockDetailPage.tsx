@@ -78,9 +78,12 @@ export function BlockDetailPage() {
             {formatDateTime(block.timestamp)} <span className="muted">(<TimeAgo value={block.timestamp} />)</span>
           </DetailRow>
           <DetailRow label="Transactions">{block.tx_count}</DetailRow>
-          <DetailRow label="Fees to producer">
-            <Amount value={block.total_fees} />
-          </DetailRow>
+          {/* Written as 0 at ingestion today; shown only once the indexer computes it. */}
+          {block.total_fees > 0 ? (
+            <DetailRow label="Fees to producer">
+              <Amount value={block.total_fees} />
+            </DetailRow>
+          ) : null}
           {latestHeight !== undefined ? (
             <DetailRow label="Confirmations">{Math.max(0, latestHeight - block.height + 1).toLocaleString()}</DetailRow>
           ) : null}

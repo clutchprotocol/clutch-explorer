@@ -8,6 +8,8 @@ export function ValidatorsPage() {
   const { data, error } = useApi(() => explorerApi.getValidators(100, 0), []);
   const validators = data?.items ?? [];
   const total = validators.reduce((sum, v) => sum + v.blocks_produced, 0) || 1;
+  // The indexer knows producers by address only, so peer IDs are empty today; skip the column then.
+  const hasPeerIds = validators.some((v) => v.peer_id);
 
   return (
     <div className="page-grid">
@@ -29,7 +31,7 @@ export function ValidatorsPage() {
                 <th>Status</th>
                 <th className="num">Blocks produced</th>
                 <th className="share-col">Share</th>
-                <th>Peer ID</th>
+                {hasPeerIds ? <th>Peer ID</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -54,18 +56,20 @@ export function ValidatorsPage() {
                         <span className="shares-pct">{(share * 100).toFixed(1)}%</span>
                       </div>
                     </td>
-                    <td>
-                      {v.peer_id ? (
-                        <span className="inline-group">
-                          <span className="mono muted" title={v.peer_id}>
-                            {shortHash(v.peer_id, 10, 6)}
+                    {hasPeerIds ? (
+                      <td>
+                        {v.peer_id ? (
+                          <span className="inline-group">
+                            <span className="mono muted" title={v.peer_id}>
+                              {shortHash(v.peer_id, 10, 6)}
+                            </span>
+                            <CopyButton value={v.peer_id} label="Copy peer ID" />
                           </span>
-                          <CopyButton value={v.peer_id} label="Copy peer ID" />
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

@@ -104,7 +104,15 @@ export function TransactionDetailPage() {
             <Amount value={item.amount} />
           </DetailRow>
           <DetailRow label="Network fee">
-            <Amount value={item.fee} /> <span className="muted">to the block producer</span>
+            {item.fee > 0 ? (
+              <>
+                <Amount value={item.fee} /> <span className="muted">to the block producer</span>
+              </>
+            ) : (
+              // The indexer writes 0 for every transaction today: the node's block payload carries
+              // no per-transaction fee. Saying "$0.00" would claim the transaction was free.
+              <span className="muted">Not recorded by the explorer yet</span>
+            )}
           </DetailRow>
           <DetailRow label="Sender nonce">{item.nonce}</DetailRow>
           {referrer ? (

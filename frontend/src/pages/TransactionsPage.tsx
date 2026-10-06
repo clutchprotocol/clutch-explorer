@@ -6,7 +6,6 @@ import { useApi } from "../hooks/useApi";
 import { usePage } from "../hooks/usePage";
 
 const PAGE_SIZE = 25;
-const STATUSES = ["", "confirmed", "pending", "failed"];
 
 /** The transaction types a reader would filter by, grouped the way the chain uses them. */
 const TYPE_GROUPS: { label: string; types: string[] }[] = [
@@ -23,6 +22,8 @@ const spaced = (type: string) => type.replace(/([a-z])([A-Z])/g, "$1 $2");
 export function TransactionsPage() {
   const [page, setPage] = usePage();
   const [params, setParams] = useSearchParams();
+  // `status` is honoured if a link carries it, but not offered: the indexer stores "confirmed"
+  // for every transaction today, so a status picker could not narrow anything.
   const status = params.get("status") ?? "";
   const type = params.get("type") ?? "";
 
@@ -72,19 +73,6 @@ export function TransactionsPage() {
                 ))}
               </select>
             </label>
-            <div className="segmented" role="group" aria-label="Filter by status">
-              {STATUSES.map((value) => (
-                <button
-                  key={value || "all"}
-                  type="button"
-                  aria-pressed={status === value}
-                  className={status === value ? "is-active" : ""}
-                  onClick={() => setFilter("status", value)}
-                >
-                  {value || "All"}
-                </button>
-              ))}
-            </div>
           </div>
         }
       >
