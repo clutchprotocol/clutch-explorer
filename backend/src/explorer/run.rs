@@ -1,14 +1,13 @@
-use crate::explorer::app::build_router;
+use crate::explorer::app::{build_router, AppState};
 use crate::explorer::configuration::AppConfig;
 use crate::explorer::db::{cleanup_database, run_migrations};
 use crate::explorer::indexer::IndexerService;
-use crate::explorer::ingestion::NodeHttpIngestionSource;
-use crate::explorer::shutdown::wait_for_shutdown;
+use crate::explorer::ingestion::NodeSource;
+use crate::explorer::postgres_repository::PostgresRepository;
 use crate::explorer::reserve::ReserveClient;
-use crate::explorer::state::{AppState, ExplorerService};
+use crate::explorer::shutdown::wait_for_shutdown;
 use crate::explorer::tracing::setup_tracing;
 use sqlx::PgPool;
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
@@ -21,17 +20,13 @@ pub async fn run_api(config: AppConfig) -> Result<(), Box<dyn std::error::Error>
     // running indexer, which then kept its position only in memory: the logs showed a cursor
     // walking 295 to 303 while the table held no rows and blocks 1..295 were gone for good.
     // Wiping belongs to whoever owns the data, which is `run_indexer` below.
-    let pg_pool = if config.data_source == "postgres" {
-        let pool = PgPool::connect(&config.database_url).await?;
-        run_migrations(&pool).await?;
-        Some(pool)
-    } else {
-        None
-    };
+    let pool = PgPool::connect(&config.database_url).await?;
+    run_migrations(&pool).await?;
 
-    let service = Arc::new(ExplorerService::new(config.clone(), pg_pool.clone())?);
-    let reserve = ReserveClient::new(config.treasury_public_reconciliation_url.clone());
-    let app_state = AppState { service, reserve };
+    let app_state = AppState {
+        repo: PostgresRepository::new(pool),
+        reserve: ReserveClient::new(config.treasury_public_reconciliation_url.clone()),
+    };
     let app = build_router(app_state, &config.allowed_origins)?;
 
     let listener = TcpListener::bind(&config.listen_addr).await?;
@@ -58,10 +53,7 @@ pub async fn run_indexer(config: AppConfig) -> Result<(), Box<dyn std::error::Er
         info!("Database cleared successfully on start");
     }
 
-    let source = Arc::new(NodeHttpIngestionSource::new(
-        config.node_metrics_url.clone(),
-        config.node_ws_url.clone(),
-    ));
+    let source = NodeSource::new(config.node_metrics_url.clone(), config.node_ws_url.clone());
     let indexer = IndexerService::new(
         source,
         pool.clone(),

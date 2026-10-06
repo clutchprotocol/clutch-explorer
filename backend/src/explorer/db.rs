@@ -1,104 +1,35 @@
 use crate::explorer::error::ExplorerError;
 use sqlx::PgPool;
 
+/// Run on every start of either binary, each file in its own transaction. Not sqlx-migrate: the
+/// files are split on `;`, so every statement must be idempotent and none may contain a `;`.
+const MIGRATIONS: [&str; 4] = [
+    include_str!("../../migrations/0001_init_explorer_schema.sql"),
+    include_str!("../../migrations/0002_referrer_fees.sql"),
+    include_str!("../../migrations/0003_account_activity.sql"),
+    include_str!("../../migrations/0004_activity_count.sql"),
+];
+
 pub async fn run_migrations(pool: &PgPool) -> Result<(), ExplorerError> {
-    let migration_sql = include_str!("../../migrations/0001_init_explorer_schema.sql");
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
-    for statement in migration_sql.split(';') {
-        let statement = statement.trim();
-        if statement.is_empty() {
-            continue;
+    for migration in MIGRATIONS {
+        let mut tx = pool.begin().await?;
+        for statement in migration
+            .split(';')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            sqlx::query(statement).execute(&mut *tx).await?;
         }
-
-        sqlx::query(statement)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        tx.commit().await?;
     }
-
-    tx.commit()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
-    let migration_sql_2 = include_str!("../../migrations/0002_referrer_fees.sql");
-    let mut tx2 = pool
-        .begin()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-    for statement in migration_sql_2.split(';') {
-        let statement = statement.trim();
-        if statement.is_empty() {
-            continue;
-        }
-        sqlx::query(statement)
-            .execute(&mut *tx2)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-    }
-    tx2.commit()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
-    let migration_sql_3 = include_str!("../../migrations/0003_account_activity.sql");
-    let mut tx3 = pool
-        .begin()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-    for statement in migration_sql_3.split(';') {
-        let statement = statement.trim();
-        if statement.is_empty() {
-            continue;
-        }
-        sqlx::query(statement)
-            .execute(&mut *tx3)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-    }
-    tx3.commit()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
-    let migration_sql_4 = include_str!("../../migrations/0004_activity_count.sql");
-    let mut tx4 = pool
-        .begin()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-    for statement in migration_sql_4.split(';') {
-        let statement = statement.trim();
-        if statement.is_empty() {
-            continue;
-        }
-        sqlx::query(statement)
-            .execute(&mut *tx4)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-    }
-    tx4.commit()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
     Ok(())
 }
 
 pub async fn cleanup_database(pool: &PgPool) -> Result<(), ExplorerError> {
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
-    // Truncate all tables in reverse order of dependencies if any
-    sqlx::query("TRUNCATE TABLE account_activity, transactions, blocks, accounts, validators, indexer_cursor CASCADE")
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
-    tx.commit()
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
-
+    sqlx::query(
+        "TRUNCATE TABLE account_activity, transactions, blocks, accounts, validators, indexer_cursor CASCADE",
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }

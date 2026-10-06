@@ -18,17 +18,15 @@ All logic lives in `src/explorer/`:
 | Path | Role |
 |------|------|
 | `run.rs` | `run_api` / `run_indexer` entrypoints (tracing, pool, migrations, graceful shutdown) |
-| `app.rs` | Router + CORS — **add new routes here** |
-| `handlers.rs` | Axum handlers (paging defaults: `limit=20`, capped 100; error → HTTP mapping) |
-| `state.rs` | `AppState` / `ExplorerService`, picks repository by `data_source` config |
-| `repository.rs` | `ExplorerRepository` trait |
-| `postgres_repository.rs` | Normal read path (Postgres) |
-| `node_repository.rs` + `node_client.rs` | Alternate `data_source = "node"` read path (queries node directly, no DB) |
+| `app.rs` | `AppState` (repository + reserve client), router + CORS — **add new routes here** |
+| `handlers.rs` | Axum handlers (paging defaults: `limit=20`, capped 100) |
+| `postgres_repository.rs` | `PostgresRepository`, the API's whole read path |
+| `reserve.rs` | `ReserveClient`: the treasury's reconciliation, cached, behind `/api/v1/reserve` |
 | `indexer.rs` | `IndexerService` — the poll → fetch → upsert loop |
-| `ingestion.rs` | `NodeIngestionSource` trait + `NodeHttpIngestionSource` (talks to the node) |
+| `ingestion.rs` | `NodeSource` (talks to the node: metrics for the head, one `get_block_by_index` per block) |
 | `activity.rs` | Parses `balance_effects` from node payloads into `account_activity` rows |
-| `referrer.rs` | Referrer-fee enrichment (ceiling division matches clutch-node), `normalize_hex_address` |
-| `models.rs` | API DTOs; `error.rs` maps to 404/400/502/503 |
+| `referrer.rs` | Referrer-fee enrichment (floor division, matches clutch-node), `normalize_hex_address` |
+| `models.rs` | API DTOs; `error.rs` is `ExplorerError`, which renders itself as 404/400/502/503 JSON |
 | `configuration.rs` | Config struct; `db.rs` migrations + cleanup; `seq.rs`/`tracing.rs` Seq logging |
 
 ### Indexing pipeline
@@ -44,23 +42,24 @@ All logic lives in `src/explorer/`:
 `/health`, `/ready`, `/api/v1/blocks`, `/api/v1/blocks/:id` (height or hash),
 `/api/v1/transactions` (`?address=&status=&block=&type=`; the filters travel as one `TransactionFilter` in `models.rs`), `/api/v1/transactions/:hash`,
 `/api/v1/accounts/:address`, `/api/v1/accounts/:address/activity`,
-`/api/v1/validators`, `/api/v1/search?q=`, `/api/v1/stats`.
+`/api/v1/validators`, `/api/v1/search?q=`, `/api/v1/stats`, `/api/v1/reserve`.
 
-New endpoint = handler in `handlers.rs` + route in `app.rs` + method on `ExplorerService`
-(`state.rs`) + trait method in `repository.rs` + impls in `postgres_repository.rs` and
-`node_repository.rs` + DTO in `models.rs`. Frontend client: `frontend/src/api/client.ts` + `types.ts`.
+New endpoint = handler in `handlers.rs` + route in `app.rs` + method on `PostgresRepository` +
+DTO in `models.rs`. Frontend client: `frontend/src/api/client.ts` + `types.ts`.
 
 ### Config
 
 - `config/{env}.toml` selected by `--env` (both binaries take it; default `default` → `config/default.toml`). Env vars with `APP_` prefix override (e.g. `APP_DATABASE_URL`); `.env` is loaded via dotenv.
-- `data_source`: `"postgres"` (normal) or `"node"` (DB-less passthrough).
+- There is one read path, Postgres. The old `data_source = "node"` mode (and its `strict_mode` and
+  `clutch_node_api_url` keys) was removed: it called a REST API the node never had. Those keys are
+  ignored if a config still carries them.
 - `developer_mode` / `cleanup_on_start`: truncate all tables on shutdown / startup.
 - `ride_*_referrer_fee_bps` must match clutch-node config or RidePay fee display drifts.
 
 ### DB schema / migrations
 
 - `migrations/*.sql` — tables: `blocks`, `transactions`, `accounts`, `validators`, `account_activity`, `indexer_cursor`.
-- **Not sqlx-migrate.** `db.rs::run_migrations` runs each file via `include_str!` on every startup, splitting on `;`. Consequences: new migration files must be manually wired into `db.rs`; every statement must be idempotent (`IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`); no `;` inside statement bodies (no PL/pgSQL functions).
+- **Not sqlx-migrate.** `db.rs::run_migrations` runs each file via `include_str!` on every startup, splitting on `;`. Consequences: new migration files must be added to the `MIGRATIONS` list in `db.rs`; every statement must be idempotent (`IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`); no `;` inside statement bodies (no PL/pgSQL functions).
 - All queries use runtime `sqlx::query` (no `query!` macros) — **no sqlx offline mode / `.sqlx` dir / DATABASE_URL needed to compile**.
 
 ## Frontend (`frontend/`)

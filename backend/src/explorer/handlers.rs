@@ -1,12 +1,15 @@
+use crate::explorer::app::AppState;
 use crate::explorer::error::ExplorerError;
-use crate::explorer::state::AppState;
+use crate::explorer::models::{
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, ListResponseDto, PagingDto,
+    StatsDto, TransactionDetailDto, TransactionFilter, TransactionListItemDto, ValidatorDto,
+};
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::Json;
-use serde::Deserialize;
-use serde_json::json;
-use crate::explorer::models::{ApiErrorDto, ListResponseDto, PagingDto, TransactionFilter};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+type ApiResult<T> = Result<Json<T>, ExplorerError>;
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -19,234 +22,121 @@ pub struct ListQuery {
     pub tx_type: Option<String>,
 }
 
+impl ListQuery {
+    /// `(limit, offset)`: 20 by default, never more than 100.
+    fn page(&self) -> (usize, usize) {
+        (self.limit.unwrap_or(20).min(100), self.offset.unwrap_or(0))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
     pub q: String,
 }
 
-pub async fn health() -> impl IntoResponse {
-    (StatusCode::OK, Json(json!({ "status": "ok" })))
-}
-
-pub async fn ready() -> impl IntoResponse {
-    (StatusCode::OK, Json(json!({ "status": "ready" })))
-}
-
-fn map_error(err: ExplorerError) -> (StatusCode, Json<ApiErrorDto>) {
-    match err {
-        ExplorerError::NotFound(message) => (
-            StatusCode::NOT_FOUND,
-            Json(ApiErrorDto {
-                code: "not_found".to_string(),
-                message,
-            }),
-        ),
-        ExplorerError::InvalidRequest(message) => (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorDto {
-                code: "invalid_request".to_string(),
-                message,
-            }),
-        ),
-        ExplorerError::Upstream(message) => (
-            StatusCode::BAD_GATEWAY,
-            Json(ApiErrorDto {
-                code: "upstream_error".to_string(),
-                message,
-            }),
-        ),
-        ExplorerError::Storage(message) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ApiErrorDto {
-                code: "storage_error".to_string(),
-                message,
-            }),
-        ),
+/// The paging block is derived from the page itself: the API never counts the whole table.
+fn list<T: Serialize>(items: Vec<T>, limit: usize, offset: usize) -> ListResponseDto<T> {
+    ListResponseDto {
+        paging: PagingDto {
+            limit,
+            offset,
+            total: offset + items.len(),
+            has_more: items.len() == limit,
+        },
+        items,
     }
+}
+
+fn require(value: &str, what: &str) -> Result<(), ExplorerError> {
+    if value.trim().is_empty() {
+        return Err(ExplorerError::InvalidRequest(format!(
+            "{what} must not be empty"
+        )));
+    }
+    Ok(())
+}
+
+pub async fn health() -> Json<Value> {
+    Json(json!({ "status": "ok" }))
+}
+
+pub async fn ready() -> Json<Value> {
+    Json(json!({ "status": "ready" }))
 }
 
 pub async fn list_blocks(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
-) -> impl IntoResponse {
-    let limit = query.limit.unwrap_or(20).min(100);
-    let offset = query.offset.unwrap_or(0);
-    match state.service.get_blocks(limit, offset).await {
-        Ok(items) => (
-            StatusCode::OK,
-            Json(ListResponseDto {
-                paging: PagingDto {
-                    limit,
-                    offset,
-                    total: offset + items.len(),
-                    has_more: items.len() == limit,
-                },
-                items,
-            }),
-        )
-            .into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<ListResponseDto<BlockListItemDto>> {
+    let (limit, offset) = query.page();
+    let items = state.repo.get_blocks(limit, offset).await?;
+    Ok(Json(list(items, limit, offset)))
 }
 
-pub async fn get_block(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    if id.trim().is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorDto {
-                code: "invalid_request".to_string(),
-                message: "block id must not be empty".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match state.service.get_block(&id).await {
-        Ok(block) => (StatusCode::OK, Json(json!(block))).into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+pub async fn get_block(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<BlockDetailDto> {
+    require(&id, "block id")?;
+    Ok(Json(state.repo.get_block(&id).await?))
 }
 
 pub async fn list_transactions(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
-) -> impl IntoResponse {
-    let limit = query.limit.unwrap_or(20).min(100);
-    let offset = query.offset.unwrap_or(0);
-    match state
-        .service
-        .get_transactions(
-            limit,
-            offset,
-            TransactionFilter {
-                address: query.address,
-                status: query.status,
-                block: query.block,
-                tx_type: query.tx_type,
-            },
-        )
-        .await
-    {
-        Ok(items) => (
-            StatusCode::OK,
-            Json(ListResponseDto {
-                paging: PagingDto {
-                    limit,
-                    offset,
-                    total: offset + items.len(),
-                    has_more: items.len() == limit,
-                },
-                items,
-            }),
-        )
-            .into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<ListResponseDto<TransactionListItemDto>> {
+    let (limit, offset) = query.page();
+    let filter = TransactionFilter {
+        address: query.address,
+        status: query.status,
+        block: query.block,
+        tx_type: query.tx_type,
+    };
+    let items = state.repo.get_transactions(limit, offset, filter).await?;
+    Ok(Json(list(items, limit, offset)))
 }
 
 pub async fn get_transaction(
     State(state): State<AppState>,
     Path(hash): Path<String>,
-) -> impl IntoResponse {
-    if hash.trim().is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorDto {
-                code: "invalid_request".to_string(),
-                message: "transaction hash must not be empty".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match state.service.get_transaction(&hash).await {
-        Ok(tx) => (StatusCode::OK, Json(json!(tx))).into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<TransactionDetailDto> {
+    require(&hash, "transaction hash")?;
+    Ok(Json(state.repo.get_transaction(&hash).await?))
 }
 
 pub async fn get_account(
     State(state): State<AppState>,
     Path(address): Path<String>,
-) -> impl IntoResponse {
-    if address.trim().is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorDto {
-                code: "invalid_request".to_string(),
-                message: "address must not be empty".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match state.service.get_account(&address).await {
-        Ok(account) => (StatusCode::OK, Json(json!(account))).into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<AccountDto> {
+    require(&address, "address")?;
+    Ok(Json(state.repo.get_account(&address).await?))
 }
 
 pub async fn get_account_activity(
     State(state): State<AppState>,
     Path(address): Path<String>,
     Query(query): Query<ListQuery>,
-) -> impl IntoResponse {
-    if address.trim().is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorDto {
-                code: "invalid_request".to_string(),
-                message: "address must not be empty".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    let limit = query.limit.unwrap_or(20).min(100);
-    let offset = query.offset.unwrap_or(0);
-    match state.service.get_account_activity(&address, limit, offset).await {
-        Ok(items) => (
-            StatusCode::OK,
-            Json(ListResponseDto {
-                paging: PagingDto {
-                    limit,
-                    offset,
-                    total: offset + items.len(),
-                    has_more: items.len() == limit,
-                },
-                items,
-            }),
-        )
-            .into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<ListResponseDto<AccountActivityDto>> {
+    require(&address, "address")?;
+    let (limit, offset) = query.page();
+    let items = state
+        .repo
+        .get_account_activity(&address, limit, offset)
+        .await?;
+    Ok(Json(list(items, limit, offset)))
 }
 
 pub async fn list_validators(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
-) -> impl IntoResponse {
-    let limit = query.limit.unwrap_or(20).min(100);
-    let offset = query.offset.unwrap_or(0);
-    match state.service.get_validators(limit, offset).await {
-        Ok(items) => (
-            StatusCode::OK,
-            Json(ListResponseDto {
-                paging: PagingDto {
-                    limit,
-                    offset,
-                    total: offset + items.len(),
-                    has_more: items.len() == limit,
-                },
-                items,
-            }),
-        )
-            .into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<ListResponseDto<ValidatorDto>> {
+    let (limit, offset) = query.page();
+    let items = state.repo.get_validators(limit, offset).await?;
+    Ok(Json(list(items, limit, offset)))
 }
 
-pub async fn get_stats(State(state): State<AppState>) -> impl IntoResponse {
-    match state.service.get_stats().await {
-        Ok(stats) => (StatusCode::OK, Json(json!(stats))).into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+pub async fn get_stats(State(state): State<AppState>) -> ApiResult<StatsDto> {
+    Ok(Json(state.repo.get_stats().await?))
 }
 
 /// The reserve position behind CLT: supply, liability and custody from a single reconciliation
@@ -255,26 +145,15 @@ pub async fn get_stats(State(state): State<AppState>) -> impl IntoResponse {
 /// Always 200. "The treasury is unreachable" and "no run has happened yet" are both states a
 /// reader needs to see, and a status code would push a consumer into an error branch that hides
 /// which one it is.
-pub async fn get_reserve(State(state): State<AppState>) -> impl IntoResponse {
-    (StatusCode::OK, Json(state.reserve.latest().await))
+pub async fn get_reserve(State(state): State<AppState>) -> Json<Value> {
+    Json(state.reserve.latest().await)
 }
 
 pub async fn search(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
-) -> impl IntoResponse {
-    if query.q.trim().is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorDto {
-                code: "invalid_request".to_string(),
-                message: "search query must not be empty".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match state.service.search(&query.q).await {
-        Ok(items) => (StatusCode::OK, Json(json!({ "items": items }))).into_response(),
-        Err(err) => map_error(err).into_response(),
-    }
+) -> ApiResult<Value> {
+    require(&query.q, "search query")?;
+    let items = state.repo.search(&query.q).await?;
+    Ok(Json(json!({ "items": items })))
 }

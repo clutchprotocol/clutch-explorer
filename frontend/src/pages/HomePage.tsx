@@ -195,7 +195,7 @@ export function HomePage() {
   );
 }
 
-export function ValidatorShares({
+function ValidatorShares({
   validators,
 }: {
   validators: { address: string; blocks_produced: number; is_active: boolean }[];

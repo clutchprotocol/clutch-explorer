@@ -1,3 +1,4 @@
+use crate::explorer::error::ExplorerError;
 use crate::explorer::referrer::normalize_hex_address;
 use chrono::{DateTime, TimeZone, Utc};
 use serde_json::Value;
@@ -108,23 +109,19 @@ fn parse_effects_array(
     let Some(arr) = effects.and_then(|v| v.as_array()) else {
         return Vec::new();
     };
-
-    let mut out = Vec::new();
-    for item in arr {
-        let Some(parsed) = parse_one_effect(
-            item,
-            block_height,
-            tx_index,
-            block_ts,
-            tx_hash.clone(),
-            function_call_type.clone(),
-            default_counterparty.clone(),
-        ) else {
-            continue;
-        };
-        out.push(parsed);
-    }
-    out
+    arr.iter()
+        .filter_map(|item| {
+            parse_one_effect(
+                item,
+                block_height,
+                tx_index,
+                block_ts,
+                tx_hash.clone(),
+                function_call_type.clone(),
+                default_counterparty.clone(),
+            )
+        })
+        .collect()
 }
 
 fn parse_one_effect(
@@ -140,7 +137,7 @@ fn parse_one_effect(
     let address = effect
         .get("address")
         .and_then(|v| v.as_str())
-        .and_then(|s| normalize_hex_address(s))?;
+        .and_then(normalize_hex_address)?;
     let delta = effect.get("delta").and_then(|v| v.as_i64())?;
     let kind = effect
         .get("kind")
@@ -150,14 +147,13 @@ fn parse_one_effect(
     let counterparty = effect
         .get("counterparty")
         .and_then(|v| v.as_str())
-        .and_then(|s| normalize_hex_address(s))
+        .and_then(normalize_hex_address)
         .or(default_counterparty);
 
     let ts = item
         .get("timestamp")
         .and_then(|v| v.as_u64())
-        .map(|secs| Utc.timestamp_opt(secs as i64, 0).single())
-        .flatten()
+        .and_then(|secs| Utc.timestamp_opt(secs as i64, 0).single())
         .unwrap_or(block_ts);
 
     let tx_hash = item
@@ -169,11 +165,7 @@ fn parse_one_effect(
         .get("tx_index")
         .and_then(|v| v.as_u64())
         .map(|v| v as u32)
-        .or(if tx_hash.is_some() {
-            Some(tx_index)
-        } else {
-            None
-        });
+        .or(tx_hash.is_some().then_some(tx_index));
     let function_call_type = item
         .get("function_call_type")
         .and_then(|v| v.as_str())
@@ -211,7 +203,7 @@ pub fn activity_amount(delta: i64) -> i64 {
 pub async fn insert_account_activity(
     pool: &sqlx::PgPool,
     effect: &ParsedBalanceEffect,
-) -> Result<(), crate::explorer::error::ExplorerError> {
+) -> Result<(), ExplorerError> {
     let direction = activity_direction(effect.delta);
     let amount = activity_amount(effect.delta);
     let label = effect_label(&effect.kind);
@@ -247,8 +239,7 @@ pub async fn insert_account_activity(
     .bind(label)
     .bind(effect.timestamp)
     .execute(pool)
-    .await
-    .map_err(|e| crate::explorer::error::ExplorerError::Storage(e.to_string()))?;
+    .await?;
 
     Ok(())
 }
@@ -284,7 +275,10 @@ mod tests {
         assert_eq!(effects[0].kind, "referrer_request_fee");
         assert_eq!(effects[0].delta, 1);
         assert_eq!(effects[0].tx_hash.as_deref(), Some("0xabc123"));
-        assert_eq!(effect_label("referrer_request_fee"), "Referrer reward (request app)");
+        assert_eq!(
+            effect_label("referrer_request_fee"),
+            "Referrer reward (request app)"
+        );
     }
 
     #[test]
@@ -345,5 +339,4 @@ mod tests {
         assert_eq!(fees_earned(&effects), 3_000);
         assert_eq!(fees_earned(&[]), 0);
     }
-
 }

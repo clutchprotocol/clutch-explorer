@@ -26,7 +26,6 @@ services:
     command: ["indexer", "--env", "default"]
     environment:
       - APP_LOG_LEVEL=info
-      - APP_DATA_SOURCE=postgres
       - APP_DATABASE_URL=postgres://${EXPLORER_POSTGRES_USER:-postgres}:${EXPLORER_POSTGRES_PASSWORD:-postgres}@explorer-postgres:5432/${EXPLORER_POSTGRES_DB:-clutch_explorer}
       - APP_NODE_METRICS_URL=http://node1:3001/metrics
       - APP_NODE_WS_URL=ws://node1:8081/ws
@@ -46,10 +45,7 @@ services:
       - "8088:8088"
     environment:
       - APP_LOG_LEVEL=info
-      - APP_DATA_SOURCE=postgres
       - APP_DATABASE_URL=postgres://${EXPLORER_POSTGRES_USER:-postgres}:${EXPLORER_POSTGRES_PASSWORD:-postgres}@explorer-postgres:5432/${EXPLORER_POSTGRES_DB:-clutch_explorer}
-      - APP_CLUTCH_NODE_API_URL=http://node1:8081
-      - APP_STRICT_MODE=true
       - APP_SEQ_URL=http://seq:80
       - APP_SEQ_API_KEY=${SEQ_API_KEY:-}
       - APP_ALLOWED_ORIGINS=*
