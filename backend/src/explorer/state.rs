@@ -66,6 +66,7 @@ impl ExplorerService {
         offset: usize,
         address: Option<&str>,
         status: Option<&str>,
+        block: Option<u64>,
     ) -> Result<Vec<TransactionListItemDto>, ExplorerError> {
         self.repository
             .get_transactions(
@@ -73,6 +74,7 @@ impl ExplorerService {
                 offset,
                 address.map(String::from),
                 status.map(String::from),
+                block,
             )
             .await
     }

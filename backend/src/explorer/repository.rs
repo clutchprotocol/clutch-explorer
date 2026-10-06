@@ -17,6 +17,7 @@ pub trait ExplorerRepository: Send + Sync {
         offset: usize,
         address: Option<String>,
         status: Option<String>,
+        block: Option<u64>,
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>>;
     fn get_transaction(&self, hash: String) -> RepoFuture<'_, TransactionDetailDto>;
     fn get_account(&self, address: String) -> RepoFuture<'_, AccountDto>;

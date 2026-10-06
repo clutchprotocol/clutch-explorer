@@ -14,6 +14,7 @@ pub struct ListQuery {
     pub offset: Option<usize>,
     pub status: Option<String>,
     pub address: Option<String>,
+    pub block: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,6 +117,7 @@ pub async fn list_transactions(
             offset,
             query.address.as_deref(),
             query.status.as_deref(),
+            query.block,
         )
         .await
     {

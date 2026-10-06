@@ -193,8 +193,12 @@ impl NodeClient {
         offset: usize,
         address: Option<&str>,
         status: Option<&str>,
+        block: Option<u64>,
     ) -> Result<Vec<TransactionListItemDto>, NodeClientError> {
         let mut path = format!("api/v1/transactions?limit={}&offset={}", limit, offset);
+        if let Some(height) = block {
+            path.push_str(&format!("&block={}", height));
+        }
         if let Some(addr) = address {
             path.push_str(&format!("&address={}", addr));
         }
