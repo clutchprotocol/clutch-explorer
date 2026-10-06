@@ -1,152 +1,135 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { explorerApi } from "../api/client";
-import type { Account, AccountActivity, TransactionListItem } from "../api/types";
-import { ErrorBanner, LoadingState, Panel } from "../components/ui";
-import { formatHexAddress, formatRelativeTime, shortHash } from "../utils/format";
+import type { AccountActivity } from "../api/types";
+import { TransactionsTable } from "../components/tables";
+import {
+  AddressLink,
+  Amount,
+  BlockLink,
+  CopyButton,
+  EmptyState,
+  ErrorBanner,
+  LoadingState,
+  NotFoundState,
+  PageHeader,
+  Pagination,
+  Panel,
+  Skeleton,
+  StatCard,
+  Table,
+  TimeAgo,
+  TxLink,
+} from "../components/ui";
+import { useApi } from "../hooks/useApi";
+import { usePage } from "../hooks/usePage";
+import { formatHexAddress, formatNumber } from "../utils/format";
+
+const PAGE_SIZE = 20;
+
+function ActivityTable({ rows }: { rows: AccountActivity[] }) {
+  if (rows.length === 0) return <EmptyState>No balance changes indexed for this address yet.</EmptyState>;
+  return (
+    <Table>
+      <thead>
+        <tr>
+          <th>What</th>
+          <th className="num">Change</th>
+          <th>Counterparty</th>
+          <th>Transaction</th>
+          <th>Block</th>
+          <th>Age</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, idx) => (
+          <tr key={`${row.kind}-${row.block_height}-${row.tx_hash ?? "block"}-${idx}`}>
+            <td>{row.label}</td>
+            <td className="num">
+              <Amount value={row.amount} sign={row.direction} />
+            </td>
+            <td>{row.counterparty ? <AddressLink address={row.counterparty} /> : <span className="muted">—</span>}</td>
+            <td>{row.tx_hash ? <TxLink hash={row.tx_hash} /> : <span className="muted">—</span>}</td>
+            <td>
+              <BlockLink height={row.block_height} />
+            </td>
+            <td className="nowrap">
+              <TimeAgo value={row.timestamp} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
 
 export function AddressPage() {
-  const { address = "" } = useParams();
-  const [account, setAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<TransactionListItem[]>([]);
-  const [activity, setActivity] = useState<AccountActivity[]>([]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const { address: rawAddress = "" } = useParams();
+  const address = formatHexAddress(rawAddress) ?? rawAddress;
+  const [params] = useSearchParams();
+  const tab = params.get("tab") === "transactions" ? "transactions" : "activity";
+  const [page, setPage] = usePage();
+  const offset = (page - 1) * PAGE_SIZE;
 
-  useEffect(() => {
-    let disposed = false;
-    const load = async () => {
-      try {
-        const [accountRes, txRes, activityRes] = await Promise.all([
-          explorerApi.getAccountByAddress(address),
-          explorerApi.getTransactions(20, 0, address),
-          explorerApi.getAccountActivity(address, 20, 0),
-        ]);
-        if (disposed) return;
-        setAccount(accountRes);
-        setTransactions(txRes.items);
-        setActivity(activityRes.items);
-      } catch (err) {
-        if (!disposed) setError((err as Error).message);
-      } finally {
-        if (!disposed) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      disposed = true;
-    };
-  }, [address]);
+  const account = useApi(() => explorerApi.getAccountByAddress(address), [address]);
+  const list = useApi(
+    async () =>
+      tab === "transactions"
+        ? { kind: "transactions" as const, ...(await explorerApi.getTransactions(PAGE_SIZE, offset, { address })) }
+        : { kind: "activity" as const, ...(await explorerApi.getAccountActivity(address, PAGE_SIZE, offset)) },
+    [address, tab, offset],
+  );
 
-  if (loading) return <LoadingState />;
-  if (!account) return <ErrorBanner message="Address not found" />;
+  if (account.loading) return <LoadingState />;
+  if (account.error?.isNotFound) return <NotFoundState what="account" id={address} />;
+  if (!account.data) return <ErrorBanner message={account.error?.message ?? "The account could not be loaded."} />;
+
+  const info = account.data;
+  const tabLink = (name: string) => {
+    const next = new URLSearchParams();
+    if (name !== "activity") next.set("tab", name);
+    const query = next.toString();
+    return query ? `?${query}` : "?";
+  };
 
   return (
     <div className="page-grid">
-      <ErrorBanner message={error} />
-      <Panel title="Address Overview">
-        <dl className="detail-grid">
-          <dt>Address</dt>
-          <dd>{account.address}</dd>
-          <dt>Balance</dt>
-          <dd>{account.balance}</dd>
-          <dt>Nonce</dt>
-          <dd>{account.nonce}</dd>
-          <dt>Transactions</dt>
-          <dd>{account.tx_count}</dd>
-          <dt>Activity</dt>
-          <dd>{account.activity_count}</dd>
-          <dt>Type</dt>
-          <dd>{account.is_contract ? "Contract" : "EOA"}</dd>
-        </dl>
-      </Panel>
+      <PageHeader eyebrow="Account" title={<span className="mono address-title">{address}</span>}>
+        <CopyButton value={address} label="Copy address" />
+      </PageHeader>
 
-      <Panel title="Account Activity">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Direction</th>
-              <th>Counterparty</th>
-              <th>Transaction</th>
-              <th>Block</th>
-              <th>Age</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activity.length === 0 ? (
-              <tr>
-                <td colSpan={7}>No balance activity indexed for this address yet.</td>
-              </tr>
-            ) : (
-              activity.map((row, idx) => (
-                <tr key={`${row.kind}-${row.block_height}-${row.tx_hash ?? "block"}-${idx}`}>
-                  <td>
-                    <span className="badge">{row.label}</span>
-                  </td>
-                  <td>{row.direction === "in" ? "+" : "-"}
-                    {row.amount}</td>
-                  <td>{row.direction}</td>
-                  <td>
-                    {row.counterparty ? (
-                      (() => {
-                        const cp = formatHexAddress(row.counterparty) ?? row.counterparty;
-                        return (
-                          <Link to={`/address/${cp}`}>{shortHash(cp)}</Link>
-                        );
-                      })()
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    {row.tx_hash ? (
-                      <Link to={`/txs/${row.tx_hash}`}>{shortHash(row.tx_hash)}</Link>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <Link to={`/blocks/${row.block_height}`}>{row.block_height}</Link>
-                  </td>
-                  <td>{formatRelativeTime(row.timestamp)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </Panel>
+      <section className="stats-grid stats-grid--3" aria-label="Account summary">
+        <StatCard label="Balance" value={<Amount value={info.balance} />} hint={`${formatNumber(info.balance)} CLT base units`} />
+        <StatCard label="Transactions" value={formatNumber(info.tx_count)} hint={`nonce ${info.nonce}`} />
+        <StatCard label="Balance changes" value={formatNumber(info.activity_count)} hint="fees, payments, mints" />
+      </section>
 
-      <Panel title="Address Transactions">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Hash</th>
-              <th>Block</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Status</th>
-              <th>Age</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((tx) => (
-              <tr key={tx.hash}>
-                <td>
-                  <Link to={`/txs/${tx.hash}`}>{shortHash(tx.hash)}</Link>
-                </td>
-                <td>
-                  <Link to={`/blocks/${tx.block_height}`}>{tx.block_height}</Link>
-                </td>
-                <td>{shortHash(tx.from)}</td>
-                <td>{shortHash(tx.to)}</td>
-                <td>{tx.status}</td>
-                <td>{formatRelativeTime(tx.timestamp)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel flush>
+        <div className="tabs" role="tablist">
+          <Link role="tab" aria-selected={tab === "activity"} className={tab === "activity" ? "is-active" : ""} to={tabLink("activity")}>
+            Balance changes
+          </Link>
+          <Link
+            role="tab"
+            aria-selected={tab === "transactions"}
+            className={tab === "transactions" ? "is-active" : ""}
+            to={tabLink("transactions")}
+          >
+            Transactions
+          </Link>
+        </div>
+        <ErrorBanner message={list.error?.message} />
+        {!list.data ? (
+          list.error ? null : <Skeleton rows={10} />
+        ) : list.data.kind === "activity" ? (
+          <ActivityTable rows={list.data.items} />
+        ) : (
+          <TransactionsTable transactions={list.data.items} perspective={address} empty="No transactions for this address yet." />
+        )}
+        <Pagination
+          page={page}
+          hasMore={Boolean(list.data?.paging.has_more)}
+          onChange={setPage}
+        />
       </Panel>
     </div>
   );

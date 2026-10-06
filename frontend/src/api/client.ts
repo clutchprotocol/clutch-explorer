@@ -22,18 +22,40 @@ const API_BASE = RAW_API_BASE.endsWith("/api")
   ? RAW_API_BASE
   : `${RAW_API_BASE.replace(/\/+$/, "")}/api`;
 
+/** Carries the HTTP status so a page can tell "not found" from "the explorer is down". */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+
+  get isNotFound() {
+    return this.status === 404;
+  }
+}
+
 async function api<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch {
+    throw new ApiError("The explorer API could not be reached.", 0);
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     const message =
       typeof payload?.message === "string"
         ? payload.message
         : `Request failed with ${response.status}`;
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
   return response.json();
 }
+
+export type TransactionFilter = {
+  address?: string;
+  status?: string;
+  block?: number;
+};
 
 export const explorerApi = {
   getStats: () => api<Stats>("/v1/stats"),
@@ -41,13 +63,14 @@ export const explorerApi = {
   getBlocks: (limit = 20, offset = 0) =>
     api<ListResponse<BlockListItem>>(`/v1/blocks?limit=${limit}&offset=${offset}`),
   getBlockById: (id: string) => api<BlockDetail>(`/v1/blocks/${encodeURIComponent(id)}`),
-  getTransactions: (limit = 20, offset = 0, address?: string, status?: string) => {
+  getTransactions: (limit = 20, offset = 0, filter: TransactionFilter = {}) => {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
     });
-    if (address) params.set("address", address);
-    if (status) params.set("status", status);
+    if (filter.address) params.set("address", filter.address);
+    if (filter.status) params.set("status", filter.status);
+    if (filter.block !== undefined) params.set("block", String(filter.block));
     return api<ListResponse<TransactionListItem>>(`/v1/transactions?${params.toString()}`);
   },
   getTransactionByHash: (hash: string) =>
@@ -63,7 +86,3 @@ export const explorerApi = {
   search: (query: string) =>
     api<{ items: SearchResult[] }>(`/v1/search?q=${encodeURIComponent(query)}`),
 };
-
-
-
-

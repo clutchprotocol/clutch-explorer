@@ -42,7 +42,7 @@ All logic lives in `src/explorer/`:
 ### REST endpoints (all GET; see `app.rs`)
 
 `/health`, `/ready`, `/api/v1/blocks`, `/api/v1/blocks/:id` (height or hash),
-`/api/v1/transactions` (`?address=&status=`), `/api/v1/transactions/:hash`,
+`/api/v1/transactions` (`?address=&status=&block=`), `/api/v1/transactions/:hash`,
 `/api/v1/accounts/:address`, `/api/v1/accounts/:address/activity`,
 `/api/v1/validators`, `/api/v1/search?q=`, `/api/v1/stats`.
 
@@ -66,9 +66,13 @@ New endpoint = handler in `handlers.rs` + route in `app.rs` + method on `Explore
 ## Frontend (`frontend/`)
 
 - `src/main.tsx` → `App.tsx` routes (all under `components/Layout.tsx`):
-  `/` HomePage, `/blocks` + `/blocks/:id`, `/txs` + `/txs/:hash`, `/address/:address` (AddressPage), `/validators`. Pages in `src/pages/`.
-- API client: `src/api/client.ts` (`explorerApi`), types in `src/api/types.ts`, formatting helpers in `src/utils/format.ts`, single stylesheet `src/styles.css`.
-- Only env var: `VITE_EXPLORER_API_URL` (base URL; `/api` is auto-appended). Fallback: `http://localhost:8088` on localhost, else relative `/api`.
+  `/` HomePage, `/blocks` + `/blocks/:id`, `/txs` + `/txs/:hash`, `/address/:address` (AddressPage, `?tab=transactions`), `/validators`, `/search?q=`, and a not-found page for anything else. Pages in `src/pages/`.
+- API client: `src/api/client.ts` (`explorerApi`; throws `ApiError` with the HTTP status, so pages tell 404 from an outage), types in `src/api/types.ts`, formatting helpers in `src/utils/format.ts`, single stylesheet `src/styles.css`.
+- Shared pieces: `components/ui.tsx` (panels, links, copy buttons, badges, pagination), `components/tables.tsx` (block and transaction tables), `components/SearchBox.tsx`. Data loading goes through `hooks/useApi.ts` (optional polling; a failed poll keeps what is on screen); list pages keep their page in `?page=` via `hooks/usePage.ts`.
+- **Amounts are micro-dollars**: render them with `<Amount>` / `formatCltPrecise` (1 USD = 1,000,000 CLT), never the raw integer. The flat fee is 1,000 units, so cents alone would show $0.00.
+- **Search asks the API** (`/api/v1/search`) instead of guessing from the input's shape: a 64-hex value can be a transaction or a block hash, and the indexer stores node hashes without `0x`.
+- Look: the same "road" palette as clutchprotocol.io and the docs (concrete / asphalt, sign green `#0a5c45`, lane yellow `#e8b923`, Barlow + IBM Plex Mono). Tokens live at the top of `styles.css`; dark mode follows the system and the header toggle stores an override in `localStorage`.
+- Env vars: `VITE_EXPLORER_API_URL` (base URL; `/api` is auto-appended; fallback `http://localhost:8088` on localhost, else relative `/api`) and optional `VITE_NETWORK_LABEL` for the header chip (otherwise read from the hostname: `*-stage.*` → Testnet, `*.clutchprotocol.io` → Mainnet pilot, else Local).
 
 ## Commands
 

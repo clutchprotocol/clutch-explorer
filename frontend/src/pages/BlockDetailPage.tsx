@@ -1,119 +1,94 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { explorerApi } from "../api/client";
-import type { BlockDetail, TransactionListItem } from "../api/types";
-import { ErrorBanner, LoadingState, Panel } from "../components/ui";
-import { formatRelativeTime, shortHash } from "../utils/format";
+import { TransactionsTable } from "../components/tables";
+import {
+  AddressLink,
+  Amount,
+  DetailList,
+  DetailRow,
+  ErrorBanner,
+  FullValue,
+  LoadingState,
+  NotFoundState,
+  PageHeader,
+  Panel,
+  TimeAgo,
+} from "../components/ui";
+import { useApi } from "../hooks/useApi";
+import { formatDateTime } from "../utils/format";
 
 export function BlockDetailPage() {
   const { id = "" } = useParams();
-  const navigate = useNavigate();
-  const [block, setBlock] = useState<BlockDetail | null>(null);
-  const [transactions, setTransactions] = useState<TransactionListItem[]>([]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let disposed = false;
-    const load = async () => {
-      if (!disposed) {
-        setLoading(true);
-        setError("");
-      }
-      try {
-        const [blockRes, txRes] = await Promise.all([
-          explorerApi.getBlockById(id),
-          explorerApi.getTransactions(10, 0),
-        ]);
-        if (disposed) return;
-        setBlock(blockRes);
-        setTransactions(txRes.items.filter((tx) => tx.block_height === blockRes.height));
-      } catch (err) {
-        if (!disposed) setError((err as Error).message);
-      } finally {
-        if (!disposed) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      disposed = true;
-    };
+  const { data, error, loading } = useApi(async () => {
+    const [block, stats] = await Promise.all([
+      explorerApi.getBlockById(id),
+      explorerApi.getStats().catch(() => null),
+    ]);
+    // A block holds few transactions (one per sender), so one page of 100 is all of them.
+    const txs = block.tx_count > 0 ? (await explorerApi.getTransactions(100, 0, { block: block.height })).items : [];
+    return { block, txs, latestHeight: stats?.latest_height };
   }, [id]);
 
   if (loading) return <LoadingState />;
-  if (!block) return <ErrorBanner message="Block not found" />;
+  if (error?.isNotFound) return <NotFoundState what="block" id={id} />;
+  if (!data) return <ErrorBanner message={error?.message ?? "The block could not be loaded."} />;
+
+  const { block, txs, latestHeight } = data;
+  const isTip = latestHeight !== undefined && block.height >= latestHeight;
 
   return (
     <div className="page-grid">
-      <ErrorBanner message={error} />
-      <Panel title={`Block #${block.height}`}>
-        <div className="pagination">
-          <button
-            onClick={() => navigate(`/blocks/${block.height - 1}`)}
-            disabled={block.height === 0}
-          >
-            Previous Block
-          </button>
-          <button onClick={() => navigate(`/blocks/${block.height + 1}`)}>Next Block</button>
+      <PageHeader eyebrow="Block" title={`#${block.height.toLocaleString()}`}>
+        <div className="stepper">
+          {block.height > 0 ? (
+            <Link className="button button--ghost" to={`/blocks/${block.height - 1}`}>
+              ← #{(block.height - 1).toLocaleString()}
+            </Link>
+          ) : (
+            <span className="button button--ghost is-disabled">← Previous</span>
+          )}
+          {isTip ? (
+            <span className="button button--ghost is-disabled" title="This is the newest indexed block">
+              Newest block
+            </span>
+          ) : (
+            <Link className="button button--ghost" to={`/blocks/${block.height + 1}`}>
+              #{(block.height + 1).toLocaleString()} →
+            </Link>
+          )}
         </div>
-        <dl className="detail-grid">
-          <dt>Hash</dt>
-          <dd>{block.hash}</dd>
-          <dt>Parent</dt>
-          <dd>
-            <Link to={`/blocks/${block.parent_hash}`}>{shortHash(block.parent_hash)}</Link>
-          </dd>
-          <dt>Producer</dt>
-          <dd>
+      </PageHeader>
+
+      <Panel title="Overview">
+        <DetailList>
+          <DetailRow label="Hash">
+            <FullValue value={block.hash} />
+          </DetailRow>
+          <DetailRow label="Parent">
             {block.height === 0 ? (
-              "Genesis"
+              <span className="muted">None (genesis)</span>
             ) : (
-              <Link to={`/address/${block.producer}`}>{block.producer}</Link>
+              <FullValue value={block.parent_hash} to={`/blocks/${block.height - 1}`} />
             )}
-          </dd>
-          <dt>Reward Recipient</dt>
-          <dd>
-            <Link to={`/address/${block.reward_recipient}`}>{block.reward_recipient}</Link>
-          </dd>
-          <dt>Block Reward</dt>
-          <dd>{block.block_reward}</dd>
-          <dt>Transactions</dt>
-          <dd>{block.tx_count}</dd>
-          <dt>Total Fees</dt>
-          <dd>{block.total_fees}</dd>
-          <dt>Age</dt>
-          <dd>{formatRelativeTime(block.timestamp)}</dd>
-        </dl>
+          </DetailRow>
+          <DetailRow label="Produced by">
+            {block.height === 0 ? <span className="muted">Genesis</span> : <AddressLink address={block.producer} full />}
+          </DetailRow>
+          <DetailRow label="Time">
+            {formatDateTime(block.timestamp)} <span className="muted">(<TimeAgo value={block.timestamp} />)</span>
+          </DetailRow>
+          <DetailRow label="Transactions">{block.tx_count}</DetailRow>
+          <DetailRow label="Fees to producer">
+            <Amount value={block.total_fees} />
+          </DetailRow>
+          {latestHeight !== undefined ? (
+            <DetailRow label="Confirmations">{Math.max(0, latestHeight - block.height + 1).toLocaleString()}</DetailRow>
+          ) : null}
+        </DetailList>
       </Panel>
-      <Panel title="Transactions in Block">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Hash</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Amount</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((tx) => (
-              <tr key={tx.hash}>
-                <td>
-                  <Link to={`/txs/${tx.hash}`}>{shortHash(tx.hash)}</Link>
-                </td>
-                <td>
-                  <Link to={`/address/${tx.from}`}>{shortHash(tx.from)}</Link>
-                </td>
-                <td>
-                  <Link to={`/address/${tx.to}`}>{shortHash(tx.to)}</Link>
-                </td>
-                <td>{tx.amount}</td>
-                <td>{tx.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <Panel title={`Transactions (${block.tx_count})`} flush>
+        <TransactionsTable transactions={txs} showBlock={false} empty="This block carries no transactions." />
       </Panel>
     </div>
   );
