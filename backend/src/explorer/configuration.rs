@@ -3,14 +3,6 @@ use dotenv::dotenv;
 use serde::Deserialize;
 use tracing::info;
 
-fn default_strict_mode() -> bool {
-    true
-}
-
-fn default_data_source() -> String {
-    "postgres".to_string()
-}
-
 fn default_database_url() -> String {
     "postgres://postgres:postgres@localhost:5432/clutch_explorer".to_string()
 }
@@ -45,16 +37,11 @@ pub struct AppConfig {
     pub listen_addr: String,
     pub seq_url: String,
     pub seq_api_key: String,
-    pub clutch_node_api_url: String,
     pub allowed_origins: String,
-    #[serde(default = "default_strict_mode")]
-    pub strict_mode: bool,
     #[serde(default = "default_developer_mode")]
     pub developer_mode: bool,
     #[serde(default = "default_developer_mode")]
     pub cleanup_on_start: bool,
-    #[serde(default = "default_data_source")]
-    pub data_source: String,
     #[serde(default = "default_database_url")]
     pub database_url: String,
     #[serde(default = "default_node_metrics_url")]

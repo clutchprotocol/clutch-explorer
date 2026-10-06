@@ -1,9 +1,19 @@
 use crate::explorer::handlers;
-use crate::explorer::state::AppState;
+use crate::explorer::postgres_repository::PostgresRepository;
+use crate::explorer::reserve::ReserveClient;
 use axum::http::{HeaderValue, Method};
 use axum::routing::get;
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
+
+#[derive(Clone)]
+pub struct AppState {
+    pub repo: PostgresRepository,
+    /// Separate from `repo` on purpose: everything there reads this explorer's own database,
+    /// and this reaches another service that may be absent or down. Keeping them apart means a
+    /// treasury outage cannot present itself as an explorer failure.
+    pub reserve: ReserveClient,
+}
 
 pub fn build_router(
     app_state: AppState,

@@ -4,7 +4,6 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
 
@@ -47,7 +46,7 @@ impl SeqLogger {
             .client
             .post(&seq_address)
             .header("Content-Type", "application/vnd.serilog.clef")
-            .header("X-Seq-ApiKey", self.api_key.to_string())
+            .header("X-Seq-ApiKey", &self.api_key)
             .body(payload)
             .send()
             .await?;
@@ -62,11 +61,11 @@ impl SeqLogger {
 }
 
 pub struct SeqLayer {
-    logger: Arc<Mutex<SeqLogger>>,
+    logger: Arc<SeqLogger>,
 }
 
 impl SeqLayer {
-    pub fn new(logger: Arc<Mutex<SeqLogger>>) -> Self {
+    pub fn new(logger: Arc<SeqLogger>) -> Self {
         Self { logger }
     }
 }
@@ -90,12 +89,7 @@ where
         let level = event.metadata().level().as_str();
 
         tokio::spawn(async move {
-            if let Err(err) = logger
-                .lock()
-                .await
-                .log_to_seq(&message, level, &fields_json)
-                .await
-            {
+            if let Err(err) = logger.log_to_seq(&message, level, &fields_json).await {
                 eprintln!("[SeqLayer] failed to send log to Seq: {}", err);
             }
         });

@@ -1,10 +1,9 @@
 use crate::explorer::activity::{fees_earned, insert_account_activity};
 use crate::explorer::error::ExplorerError;
-use crate::explorer::ingestion::{NodeIngestionSource, RawHead};
+use crate::explorer::ingestion::{NodeSource, RawHead};
 use crate::explorer::referrer::{enrich_transactions, normalize_hex_address};
 use sqlx::PgPool;
 use std::collections::HashSet;
-use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
 
@@ -15,7 +14,7 @@ use tracing::{error, info};
 const MAX_REORG_SEARCH_DEPTH: u64 = 1000;
 
 pub struct IndexerService {
-    source: Arc<dyn NodeIngestionSource>,
+    source: NodeSource,
     pool: PgPool,
     poll_interval_ms: u64,
     start_height: u64,
@@ -43,7 +42,7 @@ impl IndexerService {
     }
 
     pub fn new(
-        source: Arc<dyn NodeIngestionSource>,
+        source: NodeSource,
         pool: PgPool,
         poll_interval_ms: u64,
         start_height: u64,
@@ -65,8 +64,7 @@ impl IndexerService {
             "SELECT last_indexed_height FROM indexer_cursor WHERE id = 1",
         )
         .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
         if let Some(v) = existing {
             return Ok(v as u64);
@@ -77,8 +75,7 @@ impl IndexerService {
         )
         .bind(self.start_height as i64)
         .execute(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
         Ok(self.start_height)
     }
 
@@ -93,8 +90,7 @@ impl IndexerService {
         )
             .bind(height as i64)
             .execute(&self.pool)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+            .await?;
         Ok(())
     }
 
@@ -120,8 +116,7 @@ impl IndexerService {
         )
         .bind(producer)
         .execute(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
         Ok(())
     }
@@ -141,19 +136,15 @@ impl IndexerService {
             "#,
         )
         .execute(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
         Ok(())
     }
 
     async fn ensure_genesis_indexed(&self) -> Result<(), ExplorerError> {
-        let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM blocks WHERE height = 0",
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        let exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM blocks WHERE height = 0")
+            .fetch_one(&self.pool)
+            .await?;
 
         if exists == 0 {
             self.index_height(0).await?;
@@ -170,10 +161,7 @@ impl IndexerService {
 
         let canonical = normalize_hex_address(address).unwrap_or_else(|| address.to_string());
 
-        let snapshot = self
-            .source
-            .fetch_account_snapshot(canonical.clone())
-            .await?;
+        let snapshot = self.source.fetch_account_snapshot(&canonical).await?;
 
         let tx_count = sqlx::query_scalar::<_, i64>(
             r#"
@@ -184,8 +172,7 @@ impl IndexerService {
         )
         .bind(&canonical)
         .fetch_one(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
         let activity_count = sqlx::query_scalar::<_, i64>(
             r#"
@@ -196,8 +183,7 @@ impl IndexerService {
         )
         .bind(&canonical)
         .fetch_one(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
         sqlx::query(
             r#"
@@ -217,8 +203,7 @@ impl IndexerService {
         .bind(tx_count)
         .bind(activity_count)
         .execute(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
         Ok(())
     }
@@ -227,11 +212,11 @@ impl IndexerService {
     /// A height we haven't indexed yet reads as "not diverged" — nothing to roll back, the
     /// caller should just index forward normally.
     async fn hash_matches_at(&self, height: u64, node_hash: &str) -> Result<bool, ExplorerError> {
-        let stored: Option<String> = sqlx::query_scalar("SELECT hash FROM blocks WHERE height = $1")
-            .bind(height as i64)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT hash FROM blocks WHERE height = $1")
+                .bind(height as i64)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(match stored {
             Some(h) => h == node_hash,
             None => true,
@@ -245,7 +230,7 @@ impl IndexerService {
         let mut height = from_height;
         let mut steps = 0u64;
         loop {
-            let node_block = self.source.fetch_block_by_height(height).await?;
+            let node_block = self.source.fetch_block(height).await?;
             if self.hash_matches_at(height, &node_block.hash).await? {
                 return Ok(Some(height));
             }
@@ -271,14 +256,12 @@ impl IndexerService {
         sqlx::query("DELETE FROM account_activity WHERE block_height > $1")
             .bind(boundary)
             .execute(&self.pool)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+            .await?;
 
         sqlx::query("DELETE FROM blocks WHERE height > $1")
             .bind(boundary)
             .execute(&self.pool)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+            .await?;
 
         self.set_cursor(new_cursor).await?;
         self.sync_validators_from_blocks().await?;
@@ -321,7 +304,7 @@ impl IndexerService {
     }
 
     async fn index_height(&self, height: u64) -> Result<(), ExplorerError> {
-        let block = self.source.fetch_block_by_height(height).await?;
+        let block = self.source.fetch_block(height).await?;
 
         if height > 0 && !self.hash_matches_at(height - 1, &block.parent_hash).await? {
             // The block we're about to index doesn't chain from what we have stored for the
@@ -340,13 +323,8 @@ impl IndexerService {
             )));
         }
 
-        let producer = block.producer.clone();
-        let reward_recipient = block.reward_recipient.clone();
-        let block_reward = block.block_reward as i64;
-
-        // Fetched before the block row is written so the row carries the fees its author earned.
-        let block_data = self.source.fetch_transactions_by_block(height).await?;
-        let total_fees = fees_earned(&block_data.block_balance_effects) as i64;
+        // The row carries the fees its author earned, read from the block's own effects.
+        let total_fees = fees_earned(&block.balance_effects) as i64;
 
         sqlx::query(
             r#"
@@ -364,21 +342,20 @@ impl IndexerService {
             "#,
         )
         .bind(block.height as i64)
-        .bind(block.hash.clone())
-        .bind(block.parent_hash)
-        .bind(block.tx_count as i32)
-        .bind(producer.clone())
-        .bind(reward_recipient)
-        .bind(block_reward)
+        .bind(&block.hash)
+        .bind(&block.parent_hash)
+        .bind(block.transactions.len() as i32)
+        .bind(&block.producer)
+        .bind(&block.reward_recipient)
+        .bind(block.block_reward as i64)
         .bind(block.timestamp)
         .bind(total_fees)
         .execute(&self.pool)
-        .await
-        .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+        .await?;
 
-        self.sync_validator_for_producer(&producer).await?;
+        self.sync_validator_for_producer(&block.producer).await?;
 
-        let mut txs = block_data.transactions;
+        let mut txs = block.transactions;
         enrich_transactions(
             &self.pool,
             &mut txs,
@@ -387,13 +364,13 @@ impl IndexerService {
         )
         .await;
 
-        for effect in &block_data.block_balance_effects {
+        for effect in &block.balance_effects {
             insert_account_activity(&self.pool, effect).await?;
         }
 
         let mut addresses_to_sync: HashSet<String> = HashSet::new();
-        if Self::is_real_validator_address(&producer) {
-            addresses_to_sync.insert(producer);
+        if Self::is_real_validator_address(&block.producer) {
+            addresses_to_sync.insert(block.producer);
         }
         if Self::is_real_validator_address(&block.reward_recipient) {
             addresses_to_sync.insert(block.reward_recipient);
@@ -449,8 +426,7 @@ impl IndexerService {
             .bind(tx.offer_referrer_fee as i64)
             .bind(tx.payload_json.as_deref())
             .execute(&self.pool)
-            .await
-            .map_err(|e| ExplorerError::Storage(e.to_string()))?;
+            .await?;
 
             for effect in &tx.balance_effects {
                 insert_account_activity(&self.pool, effect).await?;
@@ -473,7 +449,7 @@ impl IndexerService {
             }
         }
 
-        for effect in &block_data.block_balance_effects {
+        for effect in &block.balance_effects {
             addresses_to_sync.insert(effect.address.clone());
             if let Some(ref cp) = effect.counterparty {
                 addresses_to_sync.insert(cp.clone());

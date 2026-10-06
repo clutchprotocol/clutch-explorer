@@ -9,7 +9,10 @@ pub fn normalize_hex_address(value: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    let body = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")).unwrap_or(trimmed);
+    let body = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
     if body.is_empty() {
         return None;
     }
@@ -28,8 +31,9 @@ pub fn parse_referrer(arguments: &Value) -> Option<String> {
     arguments
         .get("referrer")
         .and_then(|v| v.as_str())
-        .and_then(|s| normalize_hex_address(s))
+        .and_then(normalize_hex_address)
 }
+
 fn arg_str(arguments: &Value, key: &str) -> Option<String> {
     arguments
         .get(key)
@@ -40,10 +44,7 @@ fn arg_str(arguments: &Value, key: &str) -> Option<String> {
 }
 
 fn arg_u64(arguments: &Value, key: &str) -> u64 {
-    arguments
-        .get(key)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0)
+    arguments.get(key).and_then(|v| v.as_u64()).unwrap_or(0)
 }
 
 async fn load_payload(
@@ -54,14 +55,13 @@ async fn load_payload(
     if let Some(args) = block_cache.get(hash) {
         return Some(args.clone());
     }
-    let row: Option<String> = sqlx::query_scalar(
-        "SELECT payload_json FROM transactions WHERE hash = $1",
-    )
-    .bind(hash)
-    .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten()?;
+    let row: Option<String> =
+        sqlx::query_scalar("SELECT payload_json FROM transactions WHERE hash = $1")
+            .bind(hash)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten()?;
     let payload = row?;
     serde_json::from_str(&payload).ok()
 }
@@ -73,41 +73,34 @@ pub async fn enrich_transactions(
     request_fee_bps: u16,
     offer_fee_bps: u16,
 ) {
-    let mut block_cache: HashMap<String, Value> = HashMap::new();
-    for tx in txs.iter() {
-        if let Some(ref payload) = tx.payload_json {
-            if let Ok(v) = serde_json::from_str::<Value>(payload) {
-                block_cache.insert(tx.hash.clone(), v);
-            }
-        }
-    }
+    // Payloads from this block, so a ride can be traced through transactions not yet stored.
+    let block_cache: HashMap<String, Value> = txs
+        .iter()
+        .filter_map(|tx| {
+            let payload = serde_json::from_str(tx.payload_json.as_deref()?).ok()?;
+            Some((tx.hash.clone(), payload))
+        })
+        .collect();
 
     for tx in txs.iter_mut() {
-        let Some(payload_str) = tx.payload_json.clone() else {
-            continue;
-        };
-        let Ok(arguments) = serde_json::from_str::<Value>(&payload_str) else {
+        let Some(arguments) = block_cache.get(&tx.hash) else {
             continue;
         };
 
         match tx.function_call_type.as_str() {
             "RideRequest" | "RideOffer" => {
-                tx.referrer = parse_referrer(&arguments);
+                tx.referrer = parse_referrer(arguments);
             }
             "RidePay" => {
-                let fare = arg_u64(&arguments, "fare");
-                let acceptance_hash = arg_str(
-                    &arguments,
-                    "ride_acceptance_transaction_hash",
-                );
+                let fare = arg_u64(arguments, "fare");
+                let acceptance_hash = arg_str(arguments, "ride_acceptance_transaction_hash");
                 let Some(acceptance_hash) = acceptance_hash else {
                     continue;
                 };
 
-                let offer_hash = match load_payload(pool, &acceptance_hash, &block_cache).await {
-                    Some(acc_args) => arg_str(&acc_args, "ride_offer_transaction_hash"),
-                    None => None,
-                };
+                let offer_hash = load_payload(pool, &acceptance_hash, &block_cache)
+                    .await
+                    .and_then(|acc_args| arg_str(&acc_args, "ride_offer_transaction_hash"));
                 let Some(offer_hash) = offer_hash else {
                     continue;
                 };
@@ -116,27 +109,26 @@ pub async fn enrich_transactions(
                 let request_hash = offer_args
                     .as_ref()
                     .and_then(|o| arg_str(o, "ride_request_transaction_hash"));
-                let offer_referrer = offer_args
-                    .as_ref()
-                    .and_then(|o| parse_referrer(o));
+                let offer_referrer = offer_args.as_ref().and_then(parse_referrer);
 
-                let request_referrer = if let Some(ref rh) = request_hash {
-                    load_payload(pool, rh, &block_cache)
+                let request_referrer = match request_hash {
+                    Some(rh) => load_payload(pool, &rh, &block_cache)
                         .await
-                        .as_ref()
-                        .and_then(|r| parse_referrer(r))
-                } else {
-                    None
+                        .and_then(|r| parse_referrer(&r)),
+                    None => None,
                 };
 
-                let mut request_fee = 0u64;
-                let mut offer_fee = 0u64;
-                if request_referrer.is_some() && request_fee_bps > 0 {
-                    request_fee = referrer_fee_bps(request_fee_bps, fare);
-                }
-                if offer_referrer.is_some() && offer_fee_bps > 0 {
-                    offer_fee = referrer_fee_bps(offer_fee_bps, fare);
-                }
+                // `referrer_fee_bps` is already 0 for 0 bps.
+                let request_fee = if request_referrer.is_some() {
+                    referrer_fee_bps(request_fee_bps, fare)
+                } else {
+                    0
+                };
+                let offer_fee = if offer_referrer.is_some() {
+                    referrer_fee_bps(offer_fee_bps, fare)
+                } else {
+                    0
+                };
 
                 tx.request_referrer = request_referrer;
                 tx.offer_referrer = offer_referrer;
