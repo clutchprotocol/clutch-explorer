@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
     AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
-    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
+    TransactionDetailDto, TransactionFilter, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::node_client::{NodeClient, NodeClientError};
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
@@ -42,13 +42,11 @@ impl ExplorerRepository for NodeRepository {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<String>,
-        status: Option<String>,
-        block: Option<u64>,
+        filter: TransactionFilter,
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>> {
         Box::pin(async move {
             self.node_client
-                .latest_transactions(limit, offset, address.as_deref(), status.as_deref(), block)
+                .latest_transactions(limit, offset, &filter)
                 .await
                 .map_err(map_node_error)
         })

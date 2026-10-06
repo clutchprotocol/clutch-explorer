@@ -41,7 +41,7 @@ Default UI port: `5174` (when run via compose) or `5173` (standalone Vite defaul
 | `GET /health`, `/ready` | Health checks |
 | `GET /api/v1/blocks` | Block list |
 | `GET /api/v1/blocks/:id` | Block detail |
-| `GET /api/v1/transactions` | Transaction list (`?address=`, `?status=`, `?block=`) |
+| `GET /api/v1/transactions` | Transaction list (`?address=`, `?status=`, `?block=`, `?type=` such as `RidePay`) |
 | `GET /api/v1/transactions/:hash` | Transaction detail |
 | `GET /api/v1/accounts/:address` | Account info |
 | `GET /api/v1/accounts/:address/activity` | Balance activity |

@@ -8,7 +8,7 @@ const PAGE_SIZE = 25;
 
 export function BlocksPage() {
   const [page, setPage] = usePage();
-  const { data, error } = useApi(() => explorerApi.getBlocks(PAGE_SIZE, (page - 1) * PAGE_SIZE), [page]);
+  const { data, error } = useApi(() => explorerApi.getBlocks(PAGE_SIZE, (page - 1) * PAGE_SIZE), [page], page === 1 ? 10_000 : undefined);
 
   return (
     <div className="page-grid">

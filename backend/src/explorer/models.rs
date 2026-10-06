@@ -132,3 +132,13 @@ pub struct ApiErrorDto {
     pub code: String,
     pub message: String,
 }
+
+/// Optional narrowing for the transaction list. Every field set must match.
+#[derive(Debug, Clone, Default)]
+pub struct TransactionFilter {
+    pub address: Option<String>,
+    pub status: Option<String>,
+    pub block: Option<u64>,
+    /// A `function_call_type`, e.g. `Transfer` or `RidePay`.
+    pub tx_type: Option<String>,
+}

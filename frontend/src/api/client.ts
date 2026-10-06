@@ -55,6 +55,8 @@ export type TransactionFilter = {
   address?: string;
   status?: string;
   block?: number;
+  /** A `function_call_type`, e.g. `Transfer` or `RidePay`. */
+  type?: string;
 };
 
 export const explorerApi = {
@@ -71,6 +73,7 @@ export const explorerApi = {
     if (filter.address) params.set("address", filter.address);
     if (filter.status) params.set("status", filter.status);
     if (filter.block !== undefined) params.set("block", String(filter.block));
+    if (filter.type) params.set("type", filter.type);
     return api<ListResponse<TransactionListItem>>(`/v1/transactions?${params.toString()}`);
   },
   getTransactionByHash: (hash: string) =>

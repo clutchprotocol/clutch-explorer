@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { explorerApi } from "../api/client";
+import { ActivityChart } from "../components/ActivityChart";
 import { ReservePanel } from "../components/ReservePanel";
 import { SearchBox } from "../components/SearchBox";
 import {
@@ -43,14 +44,14 @@ export function HomePage() {
     async () => {
       const [stats, blocks, txs, validators, reserve] = await Promise.all([
         explorerApi.getStats(),
-        explorerApi.getBlocks(8, 0),
+        explorerApi.getBlocks(60, 0),
         explorerApi.getTransactions(8, 0),
         explorerApi.getValidators(10, 0),
         // Settled separately: the reserve comes from another service, and its being down must
         // not blank the block list. The panel renders its own unavailable state instead.
         explorerApi.getReserve().catch(() => null),
       ]);
-      return { stats, blocks: blocks.items, txs: txs.items, validators: validators.items, reserve };
+      return { stats, recent: blocks.items, blocks: blocks.items.slice(0, 8), txs: txs.items, validators: validators.items, reserve };
     },
     [],
     REFRESH_MS,
@@ -90,6 +91,12 @@ export function HomePage() {
         />
         <StatCard label="Validators" value={stats ? stats.active_validators : "—"} hint="active, proof of authority" />
       </section>
+
+      {data && data.recent.length > 0 ? (
+        <Panel title="Chain activity">
+          <ActivityChart blocks={data.recent} />
+        </Panel>
+      ) : null}
 
       <ReservePanel reserve={data?.reserve} />
 

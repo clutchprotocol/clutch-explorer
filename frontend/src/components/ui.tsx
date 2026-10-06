@@ -230,9 +230,16 @@ const TYPE_TONES: Record<string, string> = {
 };
 
 /** What a transaction does, readable at a glance; ride steps share one colour. */
-export function TypeBadge({ type, isRide }: { type: string; isRide?: boolean }) {
+export function TypeBadge({ type, isRide, linked = false }: { type: string; isRide?: boolean; linked?: boolean }) {
   const tone = isRide || type.startsWith("Ride") ? "ride" : TYPE_TONES[type] ?? "neutral";
   const label = type.replace(/([a-z])([A-Z])/g, "$1 $2");
+  if (linked) {
+    return (
+      <Link className={`type-badge type-badge--${tone}`} to={`/txs?type=${encodeURIComponent(type)}`} title={`All ${label} transactions`}>
+        {label}
+      </Link>
+    );
+  }
   return <span className={`type-badge type-badge--${tone}`}>{label}</span>;
 }
 

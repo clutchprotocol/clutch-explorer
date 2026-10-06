@@ -42,7 +42,7 @@ All logic lives in `src/explorer/`:
 ### REST endpoints (all GET; see `app.rs`)
 
 `/health`, `/ready`, `/api/v1/blocks`, `/api/v1/blocks/:id` (height or hash),
-`/api/v1/transactions` (`?address=&status=&block=`), `/api/v1/transactions/:hash`,
+`/api/v1/transactions` (`?address=&status=&block=&type=`; the filters travel as one `TransactionFilter` in `models.rs`), `/api/v1/transactions/:hash`,
 `/api/v1/accounts/:address`, `/api/v1/accounts/:address/activity`,
 `/api/v1/validators`, `/api/v1/search?q=`, `/api/v1/stats`.
 

@@ -1,7 +1,7 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
     AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
-    TransactionDetailDto, TransactionListItemDto, ValidatorDto,
+    TransactionDetailDto, TransactionFilter, TransactionListItemDto, ValidatorDto,
 };
 use crate::explorer::referrer::normalize_hex_address;
 use crate::explorer::repository::{ExplorerRepository, RepoFuture};
@@ -169,9 +169,7 @@ impl ExplorerRepository for PostgresRepository {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<String>,
-        status: Option<String>,
-        block: Option<u64>,
+        filter: TransactionFilter,
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>> {
         Box::pin(async move {
             let mut sql = String::from(
@@ -186,6 +184,12 @@ impl ExplorerRepository for PostgresRepository {
             let mut next_param = 1;
             // Transaction rows keep the address the node reported, which may or may not carry the
             // `0x` prefix, so match both spellings of the one the reader gave.
+            let TransactionFilter {
+                address,
+                status,
+                block,
+                tx_type,
+            } = filter;
             let address = address.map(|addr| {
                 let body = addr
                     .trim()
@@ -210,6 +214,10 @@ impl ExplorerRepository for PostgresRepository {
                 where_clauses.push(format!("block_height = ${}", next_param));
                 next_param += 1;
             }
+            if tx_type.is_some() {
+                where_clauses.push(format!("function_call_type = ${}", next_param));
+                next_param += 1;
+            }
             if !where_clauses.is_empty() {
                 sql.push_str(" WHERE ");
                 sql.push_str(&where_clauses.join(" AND "));
@@ -230,6 +238,9 @@ impl ExplorerRepository for PostgresRepository {
             }
             if let Some(height) = block {
                 query = query.bind(height as i64);
+            }
+            if let Some(tx_type) = tx_type {
+                query = query.bind(tx_type);
             }
             let rows = query
                 .bind(limit as i64)

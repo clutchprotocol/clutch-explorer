@@ -1,6 +1,6 @@
 use crate::explorer::error::ExplorerError;
 use crate::explorer::models::{
-    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto,
+    AccountActivityDto, AccountDto, BlockDetailDto, BlockListItemDto, SearchResultDto, StatsDto, TransactionFilter,
     TransactionDetailDto, TransactionListItemDto, ValidatorDto,
 };
 use std::future::Future;
@@ -15,9 +15,7 @@ pub trait ExplorerRepository: Send + Sync {
         &self,
         limit: usize,
         offset: usize,
-        address: Option<String>,
-        status: Option<String>,
-        block: Option<u64>,
+        filter: TransactionFilter,
     ) -> RepoFuture<'_, Vec<TransactionListItemDto>>;
     fn get_transaction(&self, hash: String) -> RepoFuture<'_, TransactionDetailDto>;
     fn get_account(&self, address: String) -> RepoFuture<'_, AccountDto>;

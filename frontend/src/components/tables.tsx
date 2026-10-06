@@ -90,7 +90,7 @@ export function TransactionsTable({
                 <TxLink hash={tx.hash} />
               </td>
               <td>
-                <TypeBadge type={tx.function_call_type} isRide={tx.is_ride_related} />
+                <TypeBadge type={tx.function_call_type} isRide={tx.is_ride_related} linked />
               </td>
               {showBlock ? (
                 <td>
