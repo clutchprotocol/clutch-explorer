@@ -19,6 +19,9 @@ export function App() {
         <Route path="/blocks/:id" element={<BlockDetailPage />} />
         <Route path="/txs" element={<TransactionsPage />} />
         <Route path="/txs/:hash" element={<TransactionDetailPage />} />
+        {/* The paths wallets link to (MetaMask: block explorer URL + "/tx/" + hash). */}
+        <Route path="/tx/:hash" element={<TransactionDetailPage />} />
+        <Route path="/block/:id" element={<BlockDetailPage />} />
         <Route path="/address/:address" element={<AddressPage />} />
         <Route path="/validators" element={<ValidatorsPage />} />
         <Route path="/search" element={<SearchPage />} />
