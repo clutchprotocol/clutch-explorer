@@ -22,6 +22,7 @@ import { formatDateTime, formatHexAddress } from "../utils/format";
 /** One line per transaction type, in the words a rider or driver would use. */
 const TYPE_MEANING: Record<string, string> = {
   Transfer: "Sends CLT from one account to another.",
+  WalletTransfer: "Sends CLT from one account to another, signed in MetaMask or another Ethereum wallet.",
   RideRequest: "A passenger asks for a ride and sets the fare aside.",
   RideOffer: "A driver offers to take a requested ride.",
   RideAcceptance: "The passenger accepts a driver's offer.",
