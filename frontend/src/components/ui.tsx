@@ -224,6 +224,7 @@ export function Amount({ value, sign }: { value: number; sign?: "in" | "out" }) 
 
 const TYPE_TONES: Record<string, string> = {
   Transfer: "neutral",
+  WalletTransfer: "neutral",
   Mint: "mint",
   Burn: "burn",
   ChainInit: "neutral",

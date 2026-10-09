@@ -9,7 +9,7 @@ const PAGE_SIZE = 25;
 
 /** The transaction types a reader would filter by, grouped the way the chain uses them. */
 const TYPE_GROUPS: { label: string; types: string[] }[] = [
-  { label: "Payments", types: ["Transfer"] },
+  { label: "Payments", types: ["Transfer", "WalletTransfer"] },
   {
     label: "Rides",
     types: ["RideRequest", "RideOffer", "RideAcceptance", "RidePay", "RideCancel", "RideRequestCancel"],
