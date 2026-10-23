@@ -65,6 +65,6 @@ export function networkLabel(): { label: string; tone: "main" | "test" | "local"
   const host = typeof window !== "undefined" ? window.location.hostname : "";
   if (configured) return { label: configured, tone: /main/i.test(configured) ? "main" : "test" };
   if (host.includes("-stage.") || host.includes("stage.")) return { label: "Testnet", tone: "test" };
-  if (host.endsWith("clutchprotocol.io")) return { label: "Mainnet pilot", tone: "main" };
+  if (host.endsWith("clutchprotocol.io")) return { label: "Mainnet", tone: "main" };
   return { label: "Local", tone: "local" };
 }
