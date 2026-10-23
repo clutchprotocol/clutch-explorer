@@ -71,7 +71,7 @@ DTO in `models.rs`. Frontend client: `frontend/src/api/client.ts` + `types.ts`.
 - **Amounts are micro-dollars**: render them with `<Amount>` / `formatCltPrecise` (1 USD = 1,000,000 CLT), never the raw integer. The flat fee is 1,000 units, so cents alone would show $0.00.
 - **Search asks the API** (`/api/v1/search`) instead of guessing from the input's shape: a 64-hex value can be a transaction or a block hash, and the node writes transaction hashes with `0x` but block hashes without, so the API matches both spellings.
 - Look: the same "road" palette as clutchprotocol.io and the docs (concrete / asphalt, sign green `#0a5c45`, lane yellow `#e8b923`, Barlow + IBM Plex Mono). Tokens live at the top of `styles.css`; dark mode follows the system and the header toggle stores an override in `localStorage`.
-- Env vars: `VITE_EXPLORER_API_URL` (base URL; `/api` is auto-appended; fallback `http://localhost:8088` on localhost, else relative `/api`) and optional `VITE_NETWORK_LABEL` for the header chip (otherwise read from the hostname: `*-stage.*` → Testnet, `*.clutchprotocol.io` → Mainnet pilot, else Local).
+- Env vars: `VITE_EXPLORER_API_URL` (base URL; `/api` is auto-appended; fallback `http://localhost:8088` on localhost, else relative `/api`) and optional `VITE_NETWORK_LABEL` for the header chip (otherwise read from the hostname: `*-stage.*` → Testnet, `*.clutchprotocol.io` → Mainnet, else Local).
 
 ## Commands
 
